@@ -54,6 +54,29 @@ class DatabaseSchemaTest extends TestCase
         ]);
     }
 
+    public function test_assets_cannot_exceed_the_total_supported_precision(): void
+    {
+        $userId = DB::table('users')->insertGetId([
+            'name' => 'Asset Limit Owner',
+            'email' => 'asset-limit-owner@example.test',
+            'password' => 'hashed-password',
+            'balance' => '0.00000000',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->expectException(QueryException::class);
+
+        DB::table('assets')->insert([
+            'user_id' => $userId,
+            'symbol' => 'BTC',
+            'amount' => '99999999999999999999.99999999',
+            'locked_amount' => '0.00000001',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     public function test_orders_require_a_supported_side_and_positive_values(): void
     {
         $userId = DB::table('users')->insertGetId([

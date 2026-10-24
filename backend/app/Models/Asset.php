@@ -11,8 +11,6 @@ use InvalidArgumentException;
 #[Fillable(['user_id', 'symbol', 'amount', 'locked_amount'])]
 class Asset extends Model
 {
-    public const array SUPPORTED_SYMBOLS = ['BTC', 'ETH'];
-
     protected function casts(): array
     {
         return [
@@ -29,11 +27,20 @@ class Asset extends Model
     protected function setSymbolAttribute(string $value): void
     {
         $symbol = Str::upper($value);
+        $supportedSymbols = self::supportedSymbols();
 
-        if (! in_array($symbol, self::SUPPORTED_SYMBOLS, true)) {
-            throw new InvalidArgumentException("Unsupported symbol: {$symbol}. Supported: " . implode(', ', self::SUPPORTED_SYMBOLS));
+        if (! in_array($symbol, $supportedSymbols, true)) {
+            throw new InvalidArgumentException("Unsupported symbol: {$symbol}. Supported: ".implode(', ', $supportedSymbols));
         }
 
         $this->attributes['symbol'] = $symbol;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function supportedSymbols(): array
+    {
+        return config('exchange.symbols', []);
     }
 }
