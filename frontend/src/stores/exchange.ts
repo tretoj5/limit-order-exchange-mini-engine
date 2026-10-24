@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import api, { errorMessage } from '../lib/api'
 import type {
   Order,
+  OrderInput,
   OrderMatchedPayload,
   OrderResponse,
   Orderbook,
@@ -22,47 +23,81 @@ export const useExchangeStore = defineStore('exchange', () => {
   const notice = ref('')
   const seenTradeIds = new Set<number>()
   let latestWalletTradeId = 0
+  let sessionGeneration = 0
+  let profileRequestId = 0
+  let ordersRequestId = 0
+  let orderbookRequestId = 0
+  let activeRefreshes = 0
 
   async function refreshAll(): Promise<void> {
+    const generation = sessionGeneration
+    activeRefreshes += 1
     loading.value = true
     error.value = ''
     try {
       await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
     } catch (cause) {
-      error.value = errorMessage(cause)
+      if (generation === sessionGeneration) error.value = errorMessage(cause)
       throw cause
     } finally {
-      loading.value = false
+      if (generation === sessionGeneration) {
+        activeRefreshes -= 1
+        loading.value = activeRefreshes > 0
+      }
     }
   }
 
   async function refreshProfile(): Promise<void> {
+    const requestId = ++profileRequestId
+    const generation = sessionGeneration
+    const tradeIdAtRequest = latestWalletTradeId
     const { data } = await api.get<Profile>('/profile')
+    if (
+      generation !== sessionGeneration
+      || requestId !== profileRequestId
+      || tradeIdAtRequest !== latestWalletTradeId
+    ) return
     profile.value = data
   }
 
   async function refreshOrders(): Promise<void> {
+    const requestId = ++ordersRequestId
+    const generation = sessionGeneration
     const { data } = await api.get<{ data: Order[] }>('/orders/mine')
-    orders.value = data.data
+    if (generation !== sessionGeneration || requestId !== ordersRequestId) return
+
+    const existingOrders = new Map(orders.value.map((order) => [order.id, order]))
+    orders.value = data.data.map((order) => {
+      const current = existingOrders.get(order.id)
+      return current && current.status !== 1 && order.status === 1
+        ? { ...order, status: current.status }
+        : order
+    })
   }
 
   async function refreshOrderbook(): Promise<void> {
-    const { data } = await api.get<Orderbook>('/orders', { params: { symbol: symbol.value } })
+    const requestId = ++orderbookRequestId
+    const generation = sessionGeneration
+    const requestedSymbol = symbol.value
+    const { data } = await api.get<Orderbook>('/orders', { params: { symbol: requestedSymbol } })
+    if (
+      generation !== sessionGeneration
+      || requestId !== orderbookRequestId
+      || symbol.value !== requestedSymbol
+    ) return
     orderbook.value = data
   }
 
   async function selectSymbol(nextSymbol: SymbolCode): Promise<void> {
     symbol.value = nextSymbol
+    orderbook.value = { symbol: nextSymbol, buy: [], sell: [] }
     await refreshOrderbook()
   }
 
-  async function placeOrder(input: {
-    symbol: SymbolCode
-    side: 'buy' | 'sell'
-    price: string
-    amount: string
-  }): Promise<OrderResponse> {
+  async function placeOrder(input: OrderInput): Promise<OrderResponse> {
+    const generation = sessionGeneration
     const { data } = await api.post<OrderResponse>('/orders', input)
+    if (generation !== sessionGeneration) return data
     if (data.trade) addRecentTrade(data.trade)
     await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
     notice.value = data.trade ? 'Your order matched successfully.' : 'Your order is now on the book.'
@@ -70,7 +105,9 @@ export const useExchangeStore = defineStore('exchange', () => {
   }
 
   async function cancelOrder(orderId: number): Promise<void> {
+    const generation = sessionGeneration
     await api.post(`/orders/${orderId}/cancel`)
+    if (generation !== sessionGeneration) return
     await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
     notice.value = 'Order cancelled. Reserved funds have been released.'
   }
@@ -79,6 +116,7 @@ export const useExchangeStore = defineStore('exchange', () => {
     if (seenTradeIds.has(payload.trade.id)) return
 
     seenTradeIds.add(payload.trade.id)
+    latestWalletTradeId = Math.max(latestWalletTradeId, payload.trade.id)
     if (seenTradeIds.size > 1000) {
       const oldestId = seenTradeIds.values().next().value
       if (oldestId !== undefined) seenTradeIds.delete(oldestId)
@@ -90,11 +128,10 @@ export const useExchangeStore = defineStore('exchange', () => {
         balance: payload.balance,
         assets: payload.assets,
       }
-      latestWalletTradeId = payload.trade.id
     }
 
     const existingOrder = orders.value.find((order) => order.id === payload.order.id)
-    if (existingOrder && existingOrder.status < payload.order.status) {
+    if (existingOrder && existingOrder.status === 1 && payload.order.status !== 1) {
       existingOrder.status = payload.order.status
     }
 
@@ -110,12 +147,18 @@ export const useExchangeStore = defineStore('exchange', () => {
   }
 
   function clear(): void {
+    sessionGeneration += 1
+    profileRequestId += 1
+    ordersRequestId += 1
+    orderbookRequestId += 1
+    activeRefreshes = 0
     profile.value = null
     orders.value = []
     orderbook.value = { symbol: symbol.value, buy: [], sell: [] }
     trades.value = []
     seenTradeIds.clear()
     latestWalletTradeId = 0
+    loading.value = false
     error.value = ''
     notice.value = ''
   }

@@ -12,6 +12,7 @@ type EchoClient = Echo<'pusher'>
 
 let echo: EchoClient | null = null
 let subscribedUserId: number | null = null
+let subscribedToken: string | null = null
 let activeHandler: ((payload: OrderMatchedPayload) => void) | null = null
 let hasConnected = false
 let onReconnect: (() => void) | null = null
@@ -24,7 +25,7 @@ export function subscribeToMatches(
   resync: () => void,
   statusChange: (status: string) => void,
 ): void {
-  if (subscribedUserId === userId && echo) {
+  if (subscribedUserId === userId && subscribedToken === token && echo) {
     activeHandler = onMatch
     onReconnect = resync
     onStatusChange = statusChange
@@ -51,6 +52,7 @@ export function subscribeToMatches(
   })
 
   subscribedUserId = userId
+  subscribedToken = token
   activeHandler = onMatch
   onReconnect = resync
   onStatusChange = statusChange
@@ -77,6 +79,7 @@ export function unsubscribeFromMatches(): void {
   }
   echo = null
   subscribedUserId = null
+  subscribedToken = null
   activeHandler = null
   onReconnect = null
   onStatusChange = null

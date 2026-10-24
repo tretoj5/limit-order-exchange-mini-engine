@@ -57,3 +57,10 @@ export interface OrderResponse {
   order: Order
   trade: Trade | null
 }
+
+export interface OrderInput {
+  symbol: SymbolCode
+  side: OrderSide
+  price: string
+  amount: string
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commission15, formatDecimal, isPositiveDecimal, multiplyToFixed8 } from './decimal'
+import { addFixed8, commission15, compareFixed8, formatDecimal, isPositiveDecimal, multiplyToFixed8 } from './decimal'
 
 describe('exact decimal helpers', () => {
   it('computes market volume and commission without floating point', () => {
@@ -22,9 +22,18 @@ describe('exact decimal helpers', () => {
     expect(isPositiveDecimal('0')).toBe(false)
     expect(isPositiveDecimal('1.000000001')).toBe(false)
     expect(isPositiveDecimal('1e3')).toBe(false)
+    expect(isPositiveDecimal('1000000000000', 12)).toBe(false)
+    expect(isPositiveDecimal('100000000000000000000', 20)).toBe(false)
   })
 
   it('formats decimal strings without converting through Number', () => {
     expect(formatDecimal('100000.5')).toBe('100,000.50000000')
+  })
+
+  it('adds and compares fixed-scale values without floating point', () => {
+    expect(addFixed8('950.00000000', '14.25000000')).toBe('964.25000000')
+    expect(compareFixed8('964.25000000', '964.25')).toBe(0)
+    expect(compareFixed8('0.00000001', '0.00000002')).toBe(-1)
+    expect(compareFixed8('100000000000000000.00000000', '1')).toBe(1)
   })
 })

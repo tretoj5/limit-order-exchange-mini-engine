@@ -94,4 +94,13 @@ describe('private realtime listener lifecycle', () => {
     expect(mocks.leave).toHaveBeenCalledWith('user.9')
     expect(mocks.disconnect).toHaveBeenCalledTimes(1)
   })
+
+  it('recreates the connection when the authenticated user token changes', () => {
+    subscribeToMatches(9, 'old-token', vi.fn(), vi.fn(), vi.fn())
+    subscribeToMatches(9, 'new-token', vi.fn(), vi.fn(), vi.fn())
+
+    expect(mocks.Echo).toHaveBeenCalledTimes(2)
+    expect(mocks.leave).toHaveBeenCalledWith('user.9')
+    expect(mocks.disconnect).toHaveBeenCalledTimes(1)
+  })
 })
