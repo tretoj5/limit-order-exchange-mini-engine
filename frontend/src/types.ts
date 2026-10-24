@@ -42,7 +42,7 @@ export interface Trade {
 
 export interface OrderMatchedPayload {
   trade: Trade
-  order: Pick<Order, 'id' | 'status'>
+  order: Order
   balance: string
   assets: Asset[]
 }

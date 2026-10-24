@@ -44,6 +44,19 @@ describe('exchange store live updates', () => {
       status: 1,
       created_at: null,
     }]
+    store.orderbook = {
+      symbol: 'BTC',
+      buy: [{
+        id: 12,
+        symbol: 'BTC',
+        side: 'buy',
+        price: '95000.00000000',
+        amount: '0.01000000',
+        status: 1,
+        created_at: null,
+      }],
+      sell: [],
+    }
     const match: OrderMatchedPayload = {
       trade: {
         id: 91,
@@ -54,7 +67,15 @@ describe('exchange store live updates', () => {
         fee: '14.25000000',
         side: 'buy',
       },
-      order: { id: 12, status: 2 },
+      order: {
+        id: 12,
+        symbol: 'BTC',
+        side: 'buy',
+        price: '95000.00000000',
+        amount: '0.01000000',
+        status: 2,
+        created_at: null,
+      },
       balance: '49035.75000000',
       assets: [{ symbol: 'BTC', amount: '1.01000000', locked_amount: '0.00000000' }],
     }
@@ -70,8 +91,55 @@ describe('exchange store live updates', () => {
     expect(store.profile?.balance).toBe('49035.75000000')
     expect(store.profile?.assets[0]?.amount).toBe('1.01000000')
     expect(store.orders[0]?.status).toBe(2)
+    expect(store.orderbook.buy).toHaveLength(0)
     expect(store.trades).toHaveLength(2)
     expect(store.trades[0]?.id).toBe(91)
+  })
+
+  it('inserts a matched order and removes it from the orderbook without fetching', () => {
+    const store = useExchangeStore()
+    store.orders = []
+    store.orderbook = {
+      symbol: 'BTC',
+      buy: [{
+        id: 12,
+        symbol: 'BTC',
+        side: 'buy',
+        price: '95000.00000000',
+        amount: '0.01000000',
+        status: 1,
+        created_at: null,
+      }],
+      sell: [],
+    }
+    const order: OrderMatchedPayload['order'] = {
+      id: 12,
+      symbol: 'BTC',
+      side: 'buy',
+      price: '95000.00000000',
+      amount: '0.01000000',
+      status: 2,
+      created_at: '2026-10-24T10:00:00.000000Z',
+    }
+
+    store.applyMatched({
+      trade: {
+        id: 91,
+        symbol: 'BTC',
+        price: '95000.00000000',
+        amount: '0.01000000',
+        usd_volume: '950.00000000',
+        fee: '14.25000000',
+        side: 'buy',
+      },
+      order,
+      balance: '49035.75000000',
+      assets: [{ symbol: 'BTC', amount: '1.01000000', locked_amount: '0.00000000' }],
+    })
+
+    expect(store.orders).toEqual([order])
+    expect(store.orderbook.buy).toHaveLength(0)
+    expect(get).not.toHaveBeenCalled()
   })
 
   it('does not replace a newer match snapshot with a stale profile response', async () => {
@@ -97,7 +165,15 @@ describe('exchange store live updates', () => {
         fee: '14.25000000',
         side: 'buy',
       },
-      order: { id: 12, status: 2 },
+      order: {
+        id: 12,
+        symbol: 'BTC',
+        side: 'buy',
+        price: '95000.00000000',
+        amount: '0.01000000',
+        status: 2,
+        created_at: null,
+      },
       balance: '49035.75000000',
       assets: [{ symbol: 'BTC', amount: '1.01000000', locked_amount: '0.00000000' }],
     })

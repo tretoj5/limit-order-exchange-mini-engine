@@ -296,7 +296,12 @@ class MatchingEngine
                     'trade' => [...$tradeData, 'side' => $side->value],
                     'order' => [
                         'id' => $order->id,
+                        'symbol' => $order->symbol,
+                        'side' => $order->side->value,
+                        'price' => $order->price,
+                        'amount' => $order->amount,
                         'status' => OrderStatus::Filled->value,
+                        'created_at' => $order->created_at?->toISOString(),
                     ],
                     'balance' => $user->balance,
                     'assets' => $assets,

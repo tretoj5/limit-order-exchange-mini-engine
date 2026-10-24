@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\OrderMatched;
 use App\Models\Asset;
+use App\Models\Order;
 use App\Models\User;
 use Illuminate\Broadcasting\BroadcastEvent;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
@@ -13,6 +14,25 @@ use Tests\TestCase;
 class RealtimeTest extends TestCase
 {
     use DatabaseMigrations;
+
+    protected function setUp(): void
+    {
+        putenv('BROADCAST_CONNECTION=pusher');
+        $_ENV['BROADCAST_CONNECTION'] = 'pusher';
+        $_SERVER['BROADCAST_CONNECTION'] = 'pusher';
+
+        parent::setUp();
+        config(['queue.default' => 'database']);
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        putenv('BROADCAST_CONNECTION=null');
+        $_ENV['BROADCAST_CONNECTION'] = 'null';
+        $_SERVER['BROADCAST_CONNECTION'] = 'null';
+    }
 
     public function test_match_is_queued_after_commit_for_each_party_with_private_user_payloads(): void
     {
@@ -80,14 +100,25 @@ class RealtimeTest extends TestCase
                 'fee' => '14.25000000',
                 'side' => 'buy',
             ],
-            'order' => ['id' => 2, 'status' => 2],
+            'order' => [
+                'id' => 2,
+                'symbol' => 'BTC',
+                'side' => 'buy',
+                'price' => '95000.00000000',
+                'amount' => '0.01000000',
+                'status' => 2,
+                'created_at' => Order::query()->findOrFail(2)->created_at?->toISOString(),
+            ],
             'balance' => '99035.75000000',
             'assets' => [
                 ['symbol' => 'BTC', 'amount' => '1.01000000', 'locked_amount' => '0.00000000'],
             ],
         ], $buyerEvent->broadcastWith());
         $this->assertSame('sell', $sellerEvent->broadcastWith()['trade']['side']);
-        $this->assertSame(['id', 'status'], array_keys($sellerEvent->broadcastWith()['order']));
+        $this->assertSame(
+            ['id', 'symbol', 'side', 'price', 'amount', 'status', 'created_at'],
+            array_keys($sellerEvent->broadcastWith()['order']),
+        );
         $this->assertArrayNotHasKey('buyer_id', $sellerEvent->broadcastWith()['trade']);
         $this->assertArrayNotHasKey('seller_id', $buyerEvent->broadcastWith()['trade']);
     }

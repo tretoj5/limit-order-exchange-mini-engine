@@ -76,7 +76,15 @@ describe('private realtime listener lifecycle', () => {
         fee: '14.25000000',
         side: 'buy',
       },
-      order: { id: 2, status: 2 },
+      order: {
+        id: 2,
+        symbol: 'BTC',
+        side: 'buy',
+        price: '95000.00000000',
+        amount: '0.01000000',
+        status: 2,
+        created_at: '2026-10-24T10:00:00.000000Z',
+      },
       balance: '49035.75000000',
       assets: [],
     }

@@ -22,6 +22,7 @@ export const useExchangeStore = defineStore('exchange', () => {
   const error = ref('')
   const notice = ref('')
   const seenTradeIds = new Set<number>()
+  const matchedOrderIds = new Set<number>()
   let latestWalletTradeId = 0
   let sessionGeneration = 0
   let profileRequestId = 0
@@ -85,7 +86,11 @@ export const useExchangeStore = defineStore('exchange', () => {
       || requestId !== orderbookRequestId
       || symbol.value !== requestedSymbol
     ) return
-    orderbook.value = data
+    orderbook.value = {
+      ...data,
+      buy: data.buy.filter((order) => !matchedOrderIds.has(order.id)),
+      sell: data.sell.filter((order) => !matchedOrderIds.has(order.id)),
+    }
   }
 
   async function selectSymbol(nextSymbol: SymbolCode): Promise<void> {
@@ -98,8 +103,14 @@ export const useExchangeStore = defineStore('exchange', () => {
     const generation = sessionGeneration
     const { data } = await api.post<OrderResponse>('/orders', input)
     if (generation !== sessionGeneration) return data
-    if (data.trade) addRecentTrade(data.trade)
-    await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
+    if (data.trade) {
+      matchedOrderIds.add(data.order.id)
+      upsertMatchedOrder(data.order)
+      removeMatchedOrderFromOrderbook(data.order.id)
+      addRecentTrade(data.trade)
+    } else {
+      await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
+    }
     notice.value = data.trade ? 'Your order matched successfully.' : 'Your order is now on the book.'
     return data
   }
@@ -115,6 +126,7 @@ export const useExchangeStore = defineStore('exchange', () => {
   function applyMatched(payload: OrderMatchedPayload): void {
     if (seenTradeIds.has(payload.trade.id)) return
 
+    const isLatestWalletSnapshot = payload.trade.id >= latestWalletTradeId
     seenTradeIds.add(payload.trade.id)
     latestWalletTradeId = Math.max(latestWalletTradeId, payload.trade.id)
     if (seenTradeIds.size > 1000) {
@@ -122,7 +134,7 @@ export const useExchangeStore = defineStore('exchange', () => {
       if (oldestId !== undefined) seenTradeIds.delete(oldestId)
     }
 
-    if (profile.value && payload.trade.id >= latestWalletTradeId) {
+    if (profile.value && isLatestWalletSnapshot) {
       profile.value = {
         ...profile.value,
         balance: payload.balance,
@@ -130,13 +142,34 @@ export const useExchangeStore = defineStore('exchange', () => {
       }
     }
 
-    const existingOrder = orders.value.find((order) => order.id === payload.order.id)
-    if (existingOrder && existingOrder.status === 1 && payload.order.status !== 1) {
-      existingOrder.status = payload.order.status
-    }
-
+    matchedOrderIds.add(payload.order.id)
+    upsertMatchedOrder(payload.order)
+    removeMatchedOrderFromOrderbook(payload.order.id)
     addRecentTrade(payload.trade)
     notice.value = `${payload.trade.symbol} order matched at ${payload.trade.price}.`
+  }
+
+  function upsertMatchedOrder(order: Order): void {
+    const existingIndex = orders.value.findIndex((item) => item.id === order.id)
+    if (existingIndex === -1) {
+      orders.value = [order, ...orders.value]
+        .sort((first, second) => second.id - first.id)
+        .slice(0, 50)
+      return
+    }
+
+    const existingOrder = orders.value[existingIndex]
+    if (existingOrder && (existingOrder.status === 1 || existingOrder.status === order.status)) {
+      orders.value[existingIndex] = order
+    }
+  }
+
+  function removeMatchedOrderFromOrderbook(orderId: number): void {
+    orderbook.value = {
+      ...orderbook.value,
+      buy: orderbook.value.buy.filter((order) => order.id !== orderId),
+      sell: orderbook.value.sell.filter((order) => order.id !== orderId),
+    }
   }
 
   function addRecentTrade(trade: Trade): void {
@@ -157,6 +190,7 @@ export const useExchangeStore = defineStore('exchange', () => {
     orderbook.value = { symbol: symbol.value, buy: [], sell: [] }
     trades.value = []
     seenTradeIds.clear()
+    matchedOrderIds.clear()
     latestWalletTradeId = 0
     loading.value = false
     error.value = ''

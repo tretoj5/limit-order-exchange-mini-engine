@@ -17,7 +17,7 @@ class OrderMatched implements ShouldBroadcast
     /**
      * @param array{
      *     trade: array{id: int, symbol: string, price: string, amount: string, usd_volume: string, fee: string, side: string},
-     *     order: array{id: int, status: int},
+     *     order: array{id: int, symbol: string, side: string, price: string, amount: string, status: int, created_at: string|null},
      *     balance: string,
      *     assets: array<int, array{symbol: string, amount: string, locked_amount: string}>
      * } $payload
@@ -43,7 +43,7 @@ class OrderMatched implements ShouldBroadcast
     /**
      * @return array{
      *     trade: array{id: int, symbol: string, price: string, amount: string, usd_volume: string, fee: string, side: string},
-     *     order: array{id: int, status: int},
+     *     order: array{id: int, symbol: string, side: string, price: string, amount: string, status: int, created_at: string|null},
      *     balance: string,
      *     assets: array<int, array{symbol: string, amount: string, locked_amount: string}>
      * }
