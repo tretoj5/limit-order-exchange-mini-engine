@@ -51,19 +51,19 @@ function statusClass(status: OrderStatus): string {
       </div>
       <div class="flex flex-wrap gap-2">
         <label class="sr-only" for="order-symbol-filter">Filter orders by symbol</label>
-        <select id="order-symbol-filter" v-model="symbolFilter" class="rounded-full border border-[#353845] bg-transparent px-3 py-2 text-xs text-[#e5e7eb]">
+        <select id="order-symbol-filter" v-model="symbolFilter" class="select-control text-xs">
           <option value="all">All markets</option>
           <option value="BTC">BTC / USD</option>
           <option value="ETH">ETH / USD</option>
         </select>
         <label class="sr-only" for="order-side-filter">Filter orders by side</label>
-        <select id="order-side-filter" v-model="sideFilter" class="rounded-full border border-[#353845] bg-transparent px-3 py-2 text-xs text-[#e5e7eb]">
+        <select id="order-side-filter" v-model="sideFilter" class="select-control text-xs">
           <option value="all">All sides</option>
           <option value="buy">Buy</option>
           <option value="sell">Sell</option>
         </select>
         <label class="sr-only" for="order-status-filter">Filter orders by status</label>
-        <select id="order-status-filter" v-model="statusFilter" class="rounded-full border border-[#353845] bg-transparent px-3 py-2 text-xs text-[#e5e7eb]">
+        <select id="order-status-filter" v-model="statusFilter" class="select-control text-xs">
           <option value="all">All statuses</option>
           <option value="open">Open</option>
           <option value="filled">Filled</option>
