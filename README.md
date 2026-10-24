@@ -5,14 +5,14 @@ Laravel API for a limit-order exchange, backed by PostgreSQL. The backend curren
 ## Requirements
 
 - Docker Engine with Docker Compose
-- A Pusher application for realtime credentials (optional until broadcasting is implemented)
+- A Pusher application for realtime credentials (required for live event delivery)
 
 ## Start the backend
 
 ```sh
 cp backend/.env.example backend/.env
 docker compose run --rm --no-deps backend php artisan key:generate
-docker compose up -d --build db db_test backend
+docker compose up -d --build db db_test backend queue
 docker compose exec backend php artisan migrate --seed
 ```
 
@@ -22,7 +22,7 @@ The API is available at `http://localhost:8000`. To run the PostgreSQL-backed fe
 docker compose exec backend php artisan test
 ```
 
-If port 8000 is already in use, set `BACKEND_PORT` when starting and when running Compose commands, for example `BACKEND_PORT=8001 docker compose up -d --build db db_test backend`.
+If port 8000 is already in use, set `BACKEND_PORT` when starting and when running Compose commands, for example `BACKEND_PORT=8001 docker compose up -d --build db db_test backend queue`.
 
 To stop the services:
 
@@ -36,7 +36,7 @@ The database seeder creates `demo@exchange.test` with password `password`. Seede
 
 ## Configuration
 
-`backend/.env.example` contains the PostgreSQL settings and Pusher variables. Set `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER`, and the matching `VITE_PUSHER_APP_KEY` / `VITE_PUSHER_APP_CLUSTER` values for a Pusher application; broadcasting is configured with `BROADCAST_CONNECTION=pusher`. The test runner uses the isolated `db_test` service and the `exchange_test` database from `backend/phpunit.xml`.
+`backend/.env.example` contains the PostgreSQL settings and Pusher variables. Set `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER`, and the matching `VITE_PUSHER_APP_KEY` / `VITE_PUSHER_APP_CLUSTER` values for a Pusher application; broadcasting is configured with `BROADCAST_CONNECTION=pusher`. The `queue` Compose service processes broadcast jobs. The test runner uses the isolated `db_test` service and the `exchange_test` database from `backend/phpunit.xml`.
 
 The backend stack is PHP 8.3, Laravel 13, PostgreSQL 16, Sanctum 4, and the Pusher PHP SDK 7.
 
@@ -85,6 +85,12 @@ All order endpoints require a Sanctum bearer token. Supported symbols are config
 
 Order creation reserves the full limit-price value plus the 1.5% maximum buyer fee for buy orders. Sell orders move available assets into `locked_amount`. Matching is full-amount only, requires a crossing price, chooses the best-priced then oldest counter order, and executes at the resting order's price. Price improvement and unused fee reserve return to the buyer. The buyer pays the fee in USD; the seller receives the full trade volume.
 
+## Realtime broadcasts
+
+On each successful match, Laravel queues one `OrderMatched` broadcast for each party to the private `user.{id}` channel (Pusher channel name `private-user.{id}`). Broadcast authorization is served at `POST /broadcasting/auth` and requires the authenticated user's Sanctum bearer token; users may authorize only their own channel. Broadcast jobs are deferred until the surrounding database transaction commits. The Compose `queue` service runs `php artisan queue:work` to deliver those jobs.
+
+Each event contains the recipient's own side, matched order ID/status, updated USD balance, and asset balances, plus the trade details. It does not include the other party's user ID. Configure the Pusher credentials in `backend/.env` before expecting live Pusher delivery.
+
 ## Financial design decisions
 
 - Money and quantities use PostgreSQL fixed-point decimals with scale 8; PHP calculations use BCMath strings.
@@ -99,4 +105,4 @@ Order creation reserves the full limit-price value plus the 1.5% maximum buyer f
 - Orderbook reads return open orders only; the user's order history includes open, filled, and cancelled orders.
 - Each place/match/cancel operation uses one retryable transaction. A transaction-scoped PostgreSQL advisory lock serializes changes per symbol; row locks then follow the fixed order: users by id, assets by `(user_id, symbol)`, then orders by id.
 
-After-commit trade broadcasting, the Vue frontend, and dedicated multi-process concurrency tests remain for later phases.
+The Vue frontend and dedicated multi-process concurrency tests remain for later phases.

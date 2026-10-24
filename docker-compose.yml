@@ -47,6 +47,20 @@ services:
       db_test:
         condition: service_healthy
 
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: php artisan queue:work --tries=3 --timeout=90
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+
   frontend:
     image: node:22-alpine
     working_dir: /app

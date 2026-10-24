@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\OrderSide;
 use App\Enums\OrderStatus;
+use App\Events\OrderMatched;
 use App\Models\Asset;
 use App\Models\Order;
 use App\Models\Trade;
@@ -209,7 +210,7 @@ class MatchingEngine
         $sellOrder->status = OrderStatus::Filled;
         $sellOrder->save();
 
-        return Trade::create([
+        $trade = Trade::create([
             'buy_order_id' => $buyOrder->id,
             'sell_order_id' => $sellOrder->id,
             'buyer_id' => $buyer->id,
@@ -220,6 +221,10 @@ class MatchingEngine
             'usd_volume' => $volume,
             'fee' => $fee,
         ]);
+
+        $this->broadcastMatch($trade, $buyOrder, $sellOrder, $buyer, $seller);
+
+        return $trade;
     }
 
     public function reservedUsd(string $price, string $amount): string
@@ -241,5 +246,51 @@ class MatchingEngine
     public function assetKey(int|string $userId, string $symbol): string
     {
         return $userId.':'.$symbol;
+    }
+
+    private function broadcastMatch(
+        Trade $trade,
+        Order $buyOrder,
+        Order $sellOrder,
+        User $buyer,
+        User $seller,
+    ): void {
+        $tradeData = [
+            'id' => $trade->id,
+            'symbol' => $trade->symbol,
+            'price' => $trade->price,
+            'amount' => $trade->amount,
+            'usd_volume' => $trade->usd_volume,
+            'fee' => $trade->fee,
+        ];
+
+        foreach ([
+            [$buyer, $buyOrder, OrderSide::Buy],
+            [$seller, $sellOrder, OrderSide::Sell],
+        ] as [$user, $order, $side]) {
+            $assets = Asset::query()
+                ->where('user_id', $user->id)
+                ->orderBy('symbol')
+                ->get(['symbol', 'amount', 'locked_amount'])
+                ->map(fn (Asset $asset): array => [
+                    'symbol' => $asset->symbol,
+                    'amount' => $asset->amount,
+                    'locked_amount' => $asset->locked_amount,
+                ])
+                ->all();
+
+            event(new OrderMatched(
+                (int) $user->id,
+                [
+                    'trade' => [...$tradeData, 'side' => $side->value],
+                    'order' => [
+                        'id' => $order->id,
+                        'status' => OrderStatus::Filled->value,
+                    ],
+                    'balance' => $user->balance,
+                    'assets' => $assets,
+                ],
+            ));
+        }
     }
 }
