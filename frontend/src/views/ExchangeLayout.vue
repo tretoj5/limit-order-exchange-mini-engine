@@ -20,7 +20,7 @@ const realtimeBadge = computed(() => {
   return 'CONNECTING'
 })
 
-async function refreshWorkspace(): Promise<void> {
+async function syncWorkspaceData(): Promise<void> {
   try {
     await exchange.refreshAll()
   } catch (error) {
@@ -29,7 +29,7 @@ async function refreshWorkspace(): Promise<void> {
 }
 
 async function loadWorkspace(): Promise<void> {
-  await refreshWorkspace()
+  await syncWorkspaceData()
 
   if (!auth.user || !auth.token) return
 
@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
 
     <main class="mx-auto min-w-0 max-w-[1200px] px-5 pb-16 sm:px-6">
       <section class="market-ambient -mx-5 mb-8 border-b border-[#e5e7eb]/10 px-5 py-10 sm:-mx-6 sm:px-6">
-        <div class="relative mx-auto flex max-w-[1200px] flex-wrap items-end justify-between gap-5">
+        <div class="relative mx-auto max-w-[1200px]">
           <div>
             <p class="category-eyebrow mb-3">{{ tradeMode ? 'Spot markets' : 'Personal workspace' }}</p>
             <h1 class="display-heading text-3xl text-[#f1f5f9] sm:text-4xl">
@@ -125,9 +125,6 @@ onBeforeUnmount(() => {
             </h1>
             <p class="mt-3 max-w-2xl text-sm leading-6 text-[#64748b]">{{ tradeMode ? 'Fixed-price orders. Full-size fills. No surprises.' : 'Your wallet and open markets, all in one place.' }}</p>
           </div>
-          <button type="button" class="ghost-action flex items-center gap-2 px-4 py-2.5 text-xs transition hover:border-[#e5e7eb] disabled:opacity-50" :disabled="exchange.loading" @click="refreshWorkspace">
-            <span aria-hidden="true" :class="exchange.loading ? 'animate-spin' : ''">↻</span> Refresh data
-          </button>
         </div>
       </section>
 
