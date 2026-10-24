@@ -19,7 +19,6 @@ class AuthTest extends TestCase
             'email' => 'new-user@example.test',
             'password' => 'password123',
             'password_confirmation' => 'password123',
-            'balance' => '999999.00000000',
         ]);
 
         $response->assertCreated()
