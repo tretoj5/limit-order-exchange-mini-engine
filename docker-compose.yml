@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: exchange
+      POSTGRES_USER: exchange
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exchange -d exchange"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Separate database so tests never touch dev data
+  db_test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: exchange_test
+      POSTGRES_USER: exchange
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exchange -d exchange_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: >
+      sh -c "php artisan serve --host=0.0.0.0 --port=8000"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - path: ./backend/.env
+        required: false
+    depends_on:
+      db:
+        condition: service_healthy
+      db_test:
+        condition: service_healthy
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    env_file:
+      - path: ./frontend/.env
+        required: false
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
