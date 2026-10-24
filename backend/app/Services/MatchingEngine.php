@@ -66,7 +66,7 @@ class MatchingEngine
             throw new \LogicException('Order matching must run inside the order-placement transaction.');
         }
 
-        $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+        $order = Order::query()->whereKey($order->id)->firstOrFail();
 
         if ($order->status !== OrderStatus::Open) {
             return null;
@@ -77,20 +77,31 @@ class MatchingEngine
             $order->side,
             $order->price,
             $order->amount,
-            lock: true,
         );
 
         if ($counterCandidate === null) {
             return null;
         }
 
-        $counterOrder = Order::query()
-            ->whereKey($counterCandidate->id)
+        $orderIds = [$order->id, $counterCandidate->id];
+        sort($orderIds, SORT_NUMERIC);
+
+        $lockedOrders = Order::query()
+            ->whereIn('id', $orderIds)
+            ->orderBy('id')
             ->lockForUpdate()
-            ->firstOrFail();
+            ->get()
+            ->keyBy('id');
+        $order = $lockedOrders->get($order->id);
+        $counterOrder = $lockedOrders->get($counterCandidate->id);
+
+        if (! $order instanceof Order || ! $counterOrder instanceof Order) {
+            return null;
+        }
 
         if (
-            $counterOrder->status !== OrderStatus::Open
+            $order->status !== OrderStatus::Open
+            || $counterOrder->status !== OrderStatus::Open
             || $counterOrder->symbol !== $order->symbol
             || $counterOrder->amount !== $order->amount
             || $counterOrder->side === $order->side

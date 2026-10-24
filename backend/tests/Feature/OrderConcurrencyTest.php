@@ -73,6 +73,27 @@ class OrderConcurrencyTest extends TestCase
         $this->assertExchangeTotalsUnchanged($totalsBefore);
     }
 
+    public function test_parallel_sell_orders_cannot_overdraw_a_users_asset_balance(): void
+    {
+        $seller = $this->createUser('race-shared-seller@example.test');
+        $totalsBefore = $this->exchangeTotals();
+
+        $responses = $this->runConcurrentRequests([
+            $this->request($seller, 'sell', amount: '7'),
+            $this->request($seller, 'sell', amount: '7'),
+        ]);
+        $statuses = array_column($responses, 'status');
+        sort($statuses);
+
+        $this->assertSame([201, 422], $statuses);
+        $this->assertSame(1, Order::query()->where('user_id', $seller->id)->count());
+        $asset = Asset::query()->where('user_id', $seller->id)->where('symbol', 'BTC')->firstOrFail();
+        $this->assertSame('3.00000000', $asset->amount);
+        $this->assertSame('7.00000000', $asset->locked_amount);
+        $this->assertNoNegativeBalances();
+        $this->assertExchangeTotalsUnchanged($totalsBefore);
+    }
+
     public function test_cancel_and_match_race_has_one_valid_outcome(): void
     {
         $seller = $this->createUser('race-cancel-seller@example.test');
@@ -115,15 +136,20 @@ class OrderConcurrencyTest extends TestCase
     /**
      * @return array{token: string, body: array<string, string>, uri: string}
      */
-    private function request(User $user, string $side, string $price = '95000', ?int $orderId = null): array
-    {
+    private function request(
+        User $user,
+        string $side,
+        string $price = '95000',
+        ?int $orderId = null,
+        string $amount = '1',
+    ): array {
         return [
             'token' => $user->createToken('concurrency-test')->plainTextToken,
             'body' => $orderId === null ? [
                 'symbol' => 'BTC',
                 'side' => $side,
                 'price' => $price,
-                'amount' => '1',
+                'amount' => $amount,
             ] : [],
             'uri' => $orderId === null ? '/api/orders' : "/api/orders/{$orderId}/cancel",
         ];
