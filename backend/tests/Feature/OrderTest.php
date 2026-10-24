@@ -234,6 +234,13 @@ class OrderTest extends TestCase
         $this->getJson('/api/orders?symbol=BTC')->assertUnauthorized();
     }
 
+    public function test_browser_navigation_to_orderbook_returns_json_unauthorized_instead_of_redirecting(): void
+    {
+        $this->get('/api/orders?symbol=BTC')
+            ->assertUnauthorized()
+            ->assertHeader('content-type', 'application/json');
+    }
+
     public function test_mine_returns_user_orders(): void
     {
         $user = $this->createUserWithBalanceAndAssets();
