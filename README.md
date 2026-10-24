@@ -1,6 +1,6 @@
 # Limit Order Exchange
 
-Laravel API and Vue SPA for a limit-order exchange, backed by PostgreSQL. The app provides Sanctum authentication, a wallet and orderbook, full-match order execution, order history and cancellation, plus private realtime match updates.
+Laravel API and Vue SPA for a limit-order exchange, backed by PostgreSQL. The app provides Sanctum authentication, a wallet and orderbook, full-match order execution, order history and cancellation, private realtime match updates, and market-depth updates for all authenticated subscribers.
 
 ## Requirements
 
@@ -42,9 +42,17 @@ To stop the services:
 docker compose down
 ```
 
-## Demo account
+## Demo accounts
 
-The database seeder creates `demo@exchange.test` with password `password`. Seeded wallets include USD and BTC/ETH balances.
+The database seeder creates these accounts (all use password `password`):
+
+| Name | Email | Initial USD | Initial BTC | Initial ETH |
+|---|---|---:|---:|---:|
+| Demo Buyer | `demo@exchange.test` | `100000.00000000` | `0.50000000` | `5.00000000` |
+| Demo Seller | `seller@exchange.test` | `100000.00000000` | `2.00000000` | `20.00000000` |
+| Demo Trader | `trader@exchange.test` | `100000.00000000` | `1.00000000` | `10.00000000` |
+
+These are the seed-time balances; placing, matching, or cancelling orders changes the live values. Re-run `docker compose exec backend php artisan migrate:fresh --seed` only if you want to reset the local database (this deletes its data).
 
 ## Configuration
 
@@ -99,9 +107,13 @@ Order creation reserves the full limit-price value plus the 1.5% maximum buyer f
 
 ## Realtime broadcasts
 
-On each successful match, Laravel queues one `OrderMatched` broadcast for each party to the private `user.{id}` channel (Pusher channel name `private-user.{id}`). Broadcast authorization is served at `POST /broadcasting/auth` and requires the authenticated user's Sanctum bearer token; users may authorize only their own channel. Broadcast jobs are deferred until the surrounding database transaction commits. The Compose `queue` service runs `php artisan queue:work` to deliver those jobs.
+On each successful match, Laravel queues one `OrderMatched` broadcast for each party to the private `user.{id}` channel (Pusher channel name `private-user.{id}`). The recipient-specific payload includes that user's wallet and order snapshot.
 
-Each event contains the recipient's own side, matched order ID/status, updated USD balance, and asset balances, plus the trade details. It does not include the other party's user ID. Configure the Pusher credentials in `backend/.env` before expecting live Pusher delivery.
+Changes to market depth are broadcast as `MarketDepthUpdated` on the private `market.{symbol}` channel (for example, `private-market.BTC`) after an order is placed, matched, or cancelled. Any authenticated user may subscribe to supported market channels; the event contains only the symbol, and subscribed clients fetch the current orderbook from the API.
+
+Broadcast authorization is served at `POST /broadcasting/auth` and requires the authenticated user's Sanctum bearer token. User channels are restricted to their owner, and market channels are restricted to supported symbols. Broadcast jobs are deferred until the surrounding database transaction commits. The Compose `queue` service runs `php artisan queue:work` to deliver those jobs.
+
+Configure the Pusher credentials in `backend/.env` and the matching public key/cluster in `frontend/.env` before expecting live Pusher delivery. Recreate the frontend after changing its Vite variables and recreate the queue service after changing backend Pusher settings.
 
 ## Financial design decisions
 
