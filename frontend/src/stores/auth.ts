@@ -56,19 +56,25 @@ export const useAuthStore = defineStore('auth', () => {
     if (initialization) return initialization
 
     initialization = (async () => {
-      if (!token.value) {
-        initialized.value = true
-        return
-      }
-
+      let completed = false
       try {
+        if (!token.value) {
+          completed = true
+          return
+        }
+
         const { data } = await api.get<User>('/profile')
         user.value = data
+        completed = true
       } catch (error) {
-        if (statusCode(error) === 401) clearSession()
-        else throw error
+        if (statusCode(error) === 401) {
+          clearSession()
+          completed = true
+        } else {
+          throw error
+        }
       } finally {
-        initialized.value = true
+        initialized.value = completed
         initialization = null
       }
     })()

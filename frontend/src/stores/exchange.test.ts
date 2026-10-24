@@ -132,6 +132,61 @@ describe('exchange store live updates', () => {
     expect(get).not.toHaveBeenCalled()
   })
 
+  it('refreshes the wallet after an immediate match even if Pusher delivery fails', async () => {
+    const store = useExchangeStore()
+    store.profile = {
+      id: 4,
+      name: 'Trader',
+      email: 'trader@example.test',
+      balance: '50000.00000000',
+      assets: [{ symbol: 'BTC', amount: '1.00000000', locked_amount: '0.00000000' }],
+    }
+    post.mockResolvedValueOnce({
+      data: {
+        order: {
+          id: 12,
+          symbol: 'BTC',
+          side: 'buy',
+          price: '95000.00000000',
+          amount: '0.01000000',
+          status: 2,
+          created_at: null,
+        },
+        trade: {
+          id: 91,
+          symbol: 'BTC',
+          price: '95000.00000000',
+          amount: '0.01000000',
+          usd_volume: '950.00000000',
+          fee: '14.25000000',
+          side: 'buy',
+        },
+      },
+    })
+    get.mockImplementation((path: string) => path === '/profile'
+      ? Promise.resolve({
+        data: {
+          id: 4,
+          name: 'Trader',
+          email: 'trader@example.test',
+          balance: '49035.75000000',
+          assets: [{ symbol: 'BTC', amount: '1.01000000', locked_amount: '0.00000000' }],
+        },
+      })
+      : Promise.resolve({ data: { symbol: 'BTC', buy: [], sell: [] } }))
+
+    await store.placeOrder({
+      symbol: 'BTC',
+      side: 'buy',
+      price: '95000',
+      amount: '0.01',
+    })
+
+    expect(store.profile?.balance).toBe('49035.75000000')
+    expect(store.profile?.assets[0]?.amount).toBe('1.01000000')
+    expect(get).toHaveBeenCalledWith('/profile')
+  })
+
   it('does not replace a newer match snapshot with a stale profile response', async () => {
     const store = useExchangeStore()
     store.profile = {

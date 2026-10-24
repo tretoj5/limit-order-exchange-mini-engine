@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { errorMessage } from './lib/api'
 import { useAuthStore } from './stores/auth'
+import { useToastStore } from './stores/toast'
 import ExchangeLayout from './views/ExchangeLayout.vue'
 import LoginView from './views/LoginView.vue'
 import OverviewView from './views/OverviewView.vue'
@@ -24,7 +26,12 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
-  await auth.initialize()
+  try {
+    await auth.initialize()
+  } catch (error) {
+    useToastStore().show(errorMessage(error), 'error')
+    if (!auth.token) return '/login'
+  }
 
   if (to.meta.requiresAuth && !auth.isAuthenticated()) return '/login'
   if (to.meta.guestOnly && auth.isAuthenticated()) return '/'

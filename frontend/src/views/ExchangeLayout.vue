@@ -27,6 +27,11 @@ async function syncWorkspaceData(): Promise<void> {
   } catch (error) {
     exchange.error = errorMessage(error)
   }
+
+  if (!auth.user && exchange.profile) {
+    const { id, name, email } = exchange.profile
+    auth.user = { id, name, email }
+  }
 }
 
 function subscribeToRealtime(symbol: SymbolCode): void {

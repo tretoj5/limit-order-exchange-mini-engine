@@ -108,7 +108,10 @@ export const useExchangeStore = defineStore('exchange', () => {
       upsertMatchedOrder(data.order)
       removeMatchedOrderFromOrderbook(data.order.id)
       addRecentTrade(data.trade)
-      await refreshMarketDepth(data.trade.symbol)
+      await Promise.all([
+        refreshProfileAfterMatch(),
+        refreshMarketDepth(data.trade.symbol),
+      ])
     } else {
       await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
     }
@@ -155,6 +158,14 @@ export const useExchangeStore = defineStore('exchange', () => {
 
     try {
       await refreshOrderbook()
+    } catch (cause) {
+      error.value = errorMessage(cause)
+    }
+  }
+
+  async function refreshProfileAfterMatch(): Promise<void> {
+    try {
+      await refreshProfile()
     } catch (cause) {
       error.value = errorMessage(cause)
     }
