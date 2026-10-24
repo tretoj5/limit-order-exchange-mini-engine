@@ -40,10 +40,12 @@ The database seeder creates `demo@exchange.test` with password `password`. Seede
 
 ## Phase 1 API
 
-- `POST /api/register`
-- `POST /api/login`
-- `POST /api/logout` (Sanctum-authenticated)
+- `POST /api/register` accepts `name`, `email`, `password`, and `password_confirmation`.
+- `POST /api/login` accepts `email` and `password`.
+- Both endpoints return a Sanctum bearer token and the new/authenticated user's public fields.
+- Send the token as `Authorization: Bearer <token>`; `POST /api/logout` revokes that token.
 - `GET /api/profile` (Sanctum-authenticated; decimal balances are strings)
+- Registration and login are limited to five attempts per minute.
 
 ## Financial design decisions
 
