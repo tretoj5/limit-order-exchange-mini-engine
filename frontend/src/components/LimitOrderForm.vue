@@ -83,50 +83,50 @@ defineExpose({ reset })
 </script>
 
 <template>
-  <article class="panel p-5 sm:p-6">
+  <article class="panel p-6 sm:p-8">
     <div class="mb-5 flex items-start justify-between">
       <div>
-        <h2 class="text-sm font-semibold text-white">Place limit order</h2>
-        <p class="mt-1 text-[11px] text-[#738092]">Orders only execute at your limit or better.</p>
+        <h2 class="text-sm font-medium text-[#f1f5f9]">Place limit order</h2>
+        <p class="mt-1 text-[11px] text-[#64748b]">Orders only execute at your limit or better.</p>
       </div>
-      <span class="rounded-md border border-[#273241] bg-[#0b1017] px-2 py-1 text-[10px] text-[#8995a5]">FULL FILL</span>
+      <span class="rounded-full border border-[#353845] px-2 py-1 text-[10px] text-[#cbd5e1]">FULL FILL</span>
     </div>
 
-    <div class="mb-5 grid grid-cols-2 rounded-xl border border-[#273241] bg-[#0b1017] p-1" role="group" aria-label="Order side">
+    <div class="mb-5 grid grid-cols-2 gap-2" role="group" aria-label="Order side">
       <button
         type="button"
-        class="rounded-lg py-2.5 text-xs font-bold transition"
-        :class="selectedSide === 'buy' ? 'bg-[#173229] text-[#69e0aa] shadow-sm' : 'text-[#7f8b9b] hover:text-white'"
+        class="ghost-action rounded-full px-3 py-2.5 text-xs transition"
+        :class="selectedSide === 'buy' ? 'border-[#e5e7eb] text-[#f1f5f9]' : 'text-[#64748b] hover:text-[#e5e7eb]'"
         :aria-pressed="selectedSide === 'buy'"
         @click="setSide('buy')"
       >Buy {{ symbol }}</button>
       <button
         type="button"
-        class="rounded-lg py-2.5 text-xs font-bold transition"
-        :class="selectedSide === 'sell' ? 'bg-[#352124] text-[#ff8b94] shadow-sm' : 'text-[#7f8b9b] hover:text-white'"
+        class="ghost-action rounded-full px-3 py-2.5 text-xs transition"
+        :class="selectedSide === 'sell' ? 'border-[#e5e7eb] text-[#f1f5f9]' : 'text-[#64748b] hover:text-[#e5e7eb]'"
         :aria-pressed="selectedSide === 'sell'"
         @click="setSide('sell')"
       >Sell {{ symbol }}</button>
     </div>
 
     <form class="space-y-4" @submit.prevent="submit">
-      <label class="block space-y-2 text-xs font-medium text-[#9aa6b5]">
+      <label class="block space-y-2 text-xs font-medium text-[#cbd5e1]">
         Market
-        <div class="input-shell flex items-center justify-between rounded-xl px-3.5 py-3">
+        <div class="input-shell flex items-center justify-between px-3.5 py-3">
           <select
             :value="symbol"
-            class="w-full appearance-none bg-transparent text-sm font-semibold text-white"
+            class="w-full appearance-none bg-transparent text-sm font-medium text-[#f1f5f9]"
             @change="emit('updateSymbol', ($event.target as HTMLSelectElement).value as SymbolCode)"
           >
             <option value="BTC">Bitcoin (BTC / USD)</option>
             <option value="ETH">Ethereum (ETH / USD)</option>
           </select>
-          <span aria-hidden="true" class="text-xs text-[#788596]">⌄</span>
+          <span aria-hidden="true" class="text-xs text-[#64748b]">⌄</span>
         </div>
       </label>
-      <label class="block space-y-2 text-xs font-medium text-[#9aa6b5]">
+      <label class="block space-y-2 text-xs font-medium text-[#cbd5e1]">
         Limit price
-        <div class="input-shell flex items-center rounded-xl px-3.5">
+        <div class="input-shell flex items-center px-3.5">
           <input
             v-model.trim="price"
             type="text"
@@ -135,15 +135,15 @@ defineExpose({ reset })
             placeholder="0.00"
             required
             aria-label="Limit price in USD"
-            class="mono w-full bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-[#485566]"
+            class="mono w-full bg-transparent py-3.5 text-sm text-[#e5e7eb] outline-none placeholder:text-[#64748b]"
             @input="clearErrors"
           >
-          <span class="text-[11px] text-[#667485]">USD</span>
+          <span class="text-[11px] text-[#64748b]">USD</span>
         </div>
       </label>
-      <label class="block space-y-2 text-xs font-medium text-[#9aa6b5]">
+      <label class="block space-y-2 text-xs font-medium text-[#cbd5e1]">
         Amount
-        <div class="input-shell flex items-center rounded-xl px-3.5">
+        <div class="input-shell flex items-center px-3.5">
           <input
             v-model.trim="amount"
             type="text"
@@ -152,42 +152,41 @@ defineExpose({ reset })
             placeholder="0.00000000"
             required
             :aria-label="`Amount in ${symbol}`"
-            class="mono w-full bg-transparent py-3.5 text-sm text-white outline-none placeholder:text-[#485566]"
+            class="mono w-full bg-transparent py-3.5 text-sm text-[#e5e7eb] outline-none placeholder:text-[#64748b]"
             @input="clearErrors"
           >
-          <span class="text-[11px] text-[#667485]">{{ symbol }}</span>
+          <span class="text-[11px] text-[#64748b]">{{ symbol }}</span>
         </div>
       </label>
-      <div class="flex justify-between text-[10px] text-[#718093]">
+      <div class="flex justify-between text-xs text-[#64748b]">
         <span>{{ availableLabel }}</span>
-        <span class="mono text-[#aab4c2]">{{ selectedSide === 'buy' ? `$${formatDecimal(available)}` : formatDecimal(available) }}</span>
+        <span class="mono text-[#e5e7eb]">{{ selectedSide === 'buy' ? `$${formatDecimal(available)}` : formatDecimal(available) }}</span>
       </div>
 
-      <div class="space-y-2 rounded-xl border border-[#222e3a] bg-[#0b1017] p-3.5">
+      <div class="space-y-3 rounded-lg border border-[#e5e7eb]/20 bg-[#0a0e1a] p-4">
         <div class="flex justify-between text-[11px]">
-          <span class="text-[#788596]">Estimated volume</span>
-          <span class="mono text-[#c7d0dc]">${{ formatDecimal(volumePreview) }}</span>
+          <span class="text-[#64748b]">Estimated volume</span>
+          <span class="mono text-[#e5e7eb]">${{ formatDecimal(volumePreview) }}</span>
         </div>
         <div class="flex justify-between text-[11px]">
-          <span class="text-[#788596]">Estimated buyer fee · 1.5%</span>
-          <span class="mono text-[#c7d0dc]">${{ formatDecimal(feePreview) }}</span>
+          <span class="text-[#64748b]">Estimated buyer fee · 1.5%</span>
+          <span class="mono text-[#e5e7eb]">${{ formatDecimal(feePreview) }}</span>
         </div>
-        <div class="my-2 border-t border-[#25313e]"></div>
-        <div class="flex justify-between gap-3 text-xs font-semibold">
-          <span class="text-[#aab4c2]">{{ reserveLabel }}</span>
-          <span class="mono text-right text-white">{{ selectedSide === 'buy' ? '$' : '' }}{{ formatDecimal(reserveAmount) }}{{ selectedSide === 'sell' ? ` ${symbol}` : '' }}</span>
+        <div class="my-2 border-t border-[#e5e7eb]/20"></div>
+        <div class="flex justify-between gap-3 text-xs font-medium">
+          <span class="text-[#cbd5e1]">{{ reserveLabel }}</span>
+          <span class="mono text-right text-[#f1f5f9]">{{ selectedSide === 'buy' ? '$' : '' }}{{ formatDecimal(reserveAmount) }}{{ selectedSide === 'sell' ? ` ${symbol}` : '' }}</span>
         </div>
       </div>
 
-      <p v-if="validationError" role="alert" class="rounded-lg border border-rose-400/25 bg-rose-400/10 px-3 py-2.5 text-xs text-rose-200">{{ validationError }}</p>
-      <p v-else-if="serverError" role="alert" class="rounded-lg border border-rose-400/25 bg-rose-400/10 px-3 py-2.5 text-xs text-rose-200">{{ serverError }}</p>
+      <p v-if="validationError" role="alert" class="rounded-lg border border-[#651a15] bg-[#0a0e1a] px-3 py-2.5 text-xs text-[#cbd5e1]">{{ validationError }}</p>
+      <p v-else-if="serverError" role="alert" class="rounded-lg border border-[#651a15] bg-[#0a0e1a] px-3 py-2.5 text-xs text-[#cbd5e1]">{{ serverError }}</p>
       <button
         :disabled="submitting"
-        class="w-full rounded-xl py-3.5 text-sm font-bold transition disabled:cursor-wait disabled:opacity-60"
-        :class="selectedSide === 'buy' ? 'bg-[#54dfa3] text-[#07110d] hover:bg-[#73eab5]' : 'bg-[#ff858e] text-[#21080b] hover:bg-[#ff9ea5]'"
+        class="primary-action w-full py-3 text-sm disabled:cursor-wait disabled:opacity-60"
       >{{ submitting ? 'Submitting…' : `Place ${selectedSide} order` }}</button>
     </form>
-    <p class="mt-3 text-center text-[10px] leading-5 text-[#657284]">
+    <p class="mt-4 text-center text-[10px] leading-5 text-[#64748b]">
       Buy orders reserve USD for the limit value and maximum buyer fee. Sell orders lock the asset amount. The buyer pays the fee when a match settles.
     </p>
   </article>

@@ -59,9 +59,6 @@ async function loadWorkspace(): Promise<void> {
       auth.token,
       (payload) => {
         exchange.applyMatched(payload)
-        void exchange.refreshAll().catch((error: unknown) => {
-          actionError.value = errorMessage(error)
-        })
       },
       () => {
         void exchange.refreshAll().catch((error: unknown) => {
@@ -127,99 +124,76 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#080b10] text-[#e5e7eb]">
-    <aside class="fixed inset-y-0 left-0 z-20 hidden w-[250px] flex-col border-r border-[#1d2732] bg-[#0b1017] px-5 py-6 xl:flex">
-      <RouterLink to="/" class="flex items-center gap-3 px-2 text-sm font-bold tracking-wide text-white">
-        <span class="grid h-10 w-10 place-items-center rounded-xl bg-[#54dfa3] text-[#07110d]">L</span>
-        LIMIT <span class="text-[#54dfa3]">/</span> EXCHANGE
-      </RouterLink>
-      <p class="mb-3 mt-12 px-3 text-[10px] font-bold uppercase tracking-[.22em] text-[#586677]">Workspace</p>
-      <nav class="space-y-1" aria-label="Workspace">
-        <RouterLink to="/" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition" :class="!tradeMode ? 'bg-[#16231f] font-semibold text-[#74e7b5]' : 'text-[#8a96a6] hover:bg-[#131a23] hover:text-white'">
-          <span aria-hidden="true" class="w-5 text-center">▦</span> Overview
+  <div class="min-h-screen bg-[#020617] text-[#e5e7eb]">
+    <header class="border-b border-[#e5e7eb]/20 bg-[#020617]">
+      <div class="mx-auto flex min-h-16 max-w-[1200px] items-center justify-between gap-4 px-5 sm:px-6">
+        <RouterLink to="/" class="flex shrink-0 items-center gap-2 text-sm font-medium text-[#f1f5f9]">
+          <span class="h-1.5 w-1.5 rounded-full bg-[#fa3812]"></span>
+          LIMIT / EXCHANGE
         </RouterLink>
-        <RouterLink to="/trade" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition" :class="tradeMode ? 'bg-[#16231f] font-semibold text-[#74e7b5]' : 'text-[#8a96a6] hover:bg-[#131a23] hover:text-white'">
-          <span aria-hidden="true" class="w-5 text-center">⌁</span> Trade
-        </RouterLink>
-      </nav>
-      <div class="mt-auto rounded-2xl border border-[#25313d] bg-[#101720] p-4">
-        <div class="mb-3 flex items-center gap-2 text-xs font-semibold text-[#dce4ed]">
-          <span class="h-2 w-2 rounded-full bg-[#54dfa3] shadow-[0_0_10px_#54dfa3]"></span>
-          Exchange status
-        </div>
-        <p class="text-[11px] leading-5 text-[#7d8999]">Orders settle atomically. Updates are delivered on your private channel.</p>
-        <p class="mt-3 text-[10px] text-[#677485]">{{ realtimeStatus }}</p>
-      </div>
-    </aside>
-
-    <main class="xl:pl-[250px]">
-      <header class="sticky top-0 z-10 flex h-[74px] items-center justify-between border-b border-[#1d2732] bg-[#080b10]/90 px-5 backdrop-blur-xl sm:px-8 lg:px-10">
-        <RouterLink to="/" class="flex items-center gap-2 text-xs font-bold tracking-wide text-white xl:hidden">
-          <span class="grid h-8 w-8 place-items-center rounded-lg bg-[#54dfa3] text-[#07110d]">L</span> LIMIT / EXCHANGE
-        </RouterLink>
-        <div class="hidden text-sm text-[#8995a5] xl:block">Exchange <span class="mx-2 text-[#394452]">/</span> <span class="text-[#e5e7eb]">{{ tradeMode ? 'Trade' : 'Overview' }}</span></div>
-        <div class="flex items-center gap-3 sm:gap-5">
-          <span class="hidden items-center gap-2 text-xs text-[#8995a5] sm:flex">
-            <i class="h-2 w-2 rounded-full" :class="realtimeBadge === 'LIVE' ? 'bg-[#54dfa3]' : 'bg-amber-300'"></i>
-            {{ realtimeBadge === 'LIVE' ? 'Live updates' : realtimeBadge === 'SETUP' ? 'Pusher setup required' : 'Connecting' }}
+        <nav class="flex items-center gap-5" aria-label="Main navigation">
+          <RouterLink to="/" class="border-b-2 py-5 text-xs font-medium transition sm:text-sm" :class="!tradeMode ? 'border-[#e5e7eb] text-[#f1f5f9]' : 'border-transparent text-[#64748b] hover:text-[#e5e7eb]'">Overview</RouterLink>
+          <RouterLink to="/trade" class="border-b-2 py-5 text-xs font-medium transition sm:text-sm" :class="tradeMode ? 'border-[#e5e7eb] text-[#f1f5f9]' : 'border-transparent text-[#64748b] hover:text-[#e5e7eb]'">Trade</RouterLink>
+        </nav>
+        <div class="flex shrink-0 items-center gap-3">
+          <span class="hidden items-center gap-2 text-xs text-[#64748b] md:flex">
+            <i class="h-1.5 w-1.5 rounded-full" :class="realtimeBadge === 'LIVE' ? 'bg-[#34d399] shadow-[0_0_8px_rgba(250,56,18,0.15)]' : 'bg-[#64748b]'"></i>
+            <span class="sr-only">Realtime status: </span>
+            {{ realtimeBadge === 'LIVE' ? 'Live' : realtimeBadge === 'SETUP' ? 'Setup required' : 'Connecting' }}
           </span>
-          <span class="h-5 border-l border-[#293341]"></span>
-          <div class="hidden text-right sm:block">
-            <p class="text-xs font-semibold text-white">{{ auth.user?.name }}</p>
-            <p class="mt-0.5 text-[10px] text-[#718093]">Exchange account</p>
-          </div>
-          <button type="button" class="rounded-lg border border-[#2a3542] px-3 py-2 text-xs font-medium text-[#b0bac7] transition hover:border-[#566273] hover:text-white" @click="logout">Sign out</button>
+          <span class="hidden max-w-32 truncate text-xs text-[#cbd5e1] sm:block">{{ auth.user?.name }}</span>
+          <button type="button" class="ghost-action px-3 py-2 text-xs transition hover:border-[#e5e7eb] sm:px-4" @click="logout">Sign out</button>
         </div>
-      </header>
+      </div>
+    </header>
 
-      <nav class="flex gap-2 border-b border-[#1d2732] px-5 py-2.5 xl:hidden sm:px-8" aria-label="Main navigation">
-        <RouterLink to="/" class="rounded-lg px-3 py-2 text-xs font-semibold" :class="!tradeMode ? 'bg-[#16231f] text-[#74e7b5]' : 'text-[#8995a5]'">Overview</RouterLink>
-        <RouterLink to="/trade" class="rounded-lg px-3 py-2 text-xs font-semibold" :class="tradeMode ? 'bg-[#16231f] text-[#74e7b5]' : 'text-[#8995a5]'">Trade</RouterLink>
-      </nav>
-
-      <div class="mx-auto min-w-0 max-w-[1500px] px-5 pb-12 pt-8 sm:px-8 lg:px-10">
-        <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <main class="mx-auto min-w-0 max-w-[1200px] px-5 pb-16 sm:px-6">
+      <section class="market-ambient -mx-5 mb-8 border-b border-[#e5e7eb]/10 px-5 py-10 sm:-mx-6 sm:px-6">
+        <div class="relative mx-auto flex max-w-[1200px] flex-wrap items-end justify-between gap-5">
           <div>
-            <p class="mb-2 text-[10px] font-bold uppercase tracking-[.23em] text-[#54dfa3]">{{ tradeMode ? 'Spot markets' : 'Personal workspace' }}</p>
-            <h1 class="text-[28px] font-semibold tracking-tight text-white sm:text-[34px]">{{ tradeMode ? 'Trade with precision.' : `Good to see you, ${auth.user?.name?.split(' ')[0] ?? 'trader'}.` }}</h1>
-            <p class="mt-2 text-sm text-[#7f8b9b]">{{ tradeMode ? 'Fixed-price orders. Full-size fills. No surprises.' : 'Your wallet and open markets, all in one place.' }}</p>
+            <p class="category-eyebrow mb-3">{{ tradeMode ? 'Spot markets' : 'Personal workspace' }}</p>
+            <h1 class="display-heading text-3xl text-[#f1f5f9] sm:text-4xl">
+              <template v-if="tradeMode">Trade with <span class="text-[#64748b]">precision.</span></template>
+              <template v-else>Good to see you, <span class="text-[#64748b]">{{ auth.user?.name?.split(' ')[0] ?? 'trader' }}.</span></template>
+            </h1>
+            <p class="mt-3 max-w-2xl text-sm leading-6 text-[#64748b]">{{ tradeMode ? 'Fixed-price orders. Full-size fills. No surprises.' : 'Your wallet and open markets, all in one place.' }}</p>
           </div>
-          <button type="button" class="flex items-center gap-2 rounded-lg border border-[#283340] bg-[#10151d] px-3.5 py-2.5 text-xs font-medium text-[#aeb8c5] transition hover:border-[#4a5868] hover:text-white disabled:opacity-50" :disabled="exchange.loading" @click="refreshWorkspace">
+          <button type="button" class="ghost-action flex items-center gap-2 px-4 py-2.5 text-xs transition hover:border-[#e5e7eb] disabled:opacity-50" :disabled="exchange.loading" @click="refreshWorkspace">
             <span aria-hidden="true" :class="exchange.loading ? 'animate-spin' : ''">↻</span> Refresh data
           </button>
         </div>
+      </section>
 
-        <div v-if="exchange.error || actionError" role="alert" class="mb-5 flex items-start justify-between gap-4 rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-200">
-          <span>{{ actionError || exchange.error }}</span>
-          <button type="button" class="text-rose-100" aria-label="Dismiss error" @click="actionError = ''; exchange.error = ''">×</button>
-        </div>
-        <div v-if="exchange.notice" role="status" class="mb-5 flex items-center justify-between gap-3 rounded-xl border border-emerald-300/20 bg-emerald-300/[.07] px-4 py-3 text-sm text-emerald-100">
-          {{ exchange.notice }}
-          <button type="button" aria-label="Dismiss message" class="text-emerald-100/70" @click="exchange.notice = ''">×</button>
-        </div>
-
-        <WalletSummary :profile="exchange.profile" />
-
-        <section class="grid min-w-0 items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,.75fr)]">
-          <div class="min-w-0 space-y-5">
-            <OrderBookPanel :symbol="exchange.symbol" :orderbook="exchange.orderbook" @select-symbol="selectMarket" />
-            <OrderHistoryTable :orders="exchange.orders" :cancelling-id="cancellingId" @cancel="cancelOrder" />
-          </div>
-          <div class="min-w-0 space-y-5">
-            <LimitOrderForm
-              ref="orderForm"
-              :symbol="exchange.symbol"
-              :profile="exchange.profile"
-              :submitting="isSubmitting"
-              :server-error="orderError"
-              @update-symbol="selectMarket"
-              @submit-order="submitOrder"
-              @clear-error="orderError = ''"
-            />
-            <RecentMatches :trades="exchange.trades" :realtime-badge="realtimeBadge" />
-          </div>
-        </section>
+      <div v-if="exchange.error || actionError" role="alert" class="mb-6 flex items-start justify-between gap-4 rounded-lg border border-[#651a15] bg-[#0a0e1a] px-4 py-3 text-sm text-[#cbd5e1]">
+        <span>{{ actionError || exchange.error }}</span>
+        <button type="button" class="text-[#cbd5e1]" aria-label="Dismiss error" @click="actionError = ''; exchange.error = ''">×</button>
       </div>
+      <div v-if="exchange.notice" role="status" class="mb-6 flex items-center justify-between gap-3 rounded-lg border border-[#353845] bg-[#0a0e1a] px-4 py-3 text-sm text-[#e5e7eb]">
+        {{ exchange.notice }}
+        <button type="button" aria-label="Dismiss message" class="text-[#64748b]" @click="exchange.notice = ''">×</button>
+      </div>
+
+      <WalletSummary :profile="exchange.profile" />
+
+      <section class="grid min-w-0 items-start gap-6 2xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,.75fr)]">
+        <div class="min-w-0 space-y-6">
+          <OrderBookPanel :symbol="exchange.symbol" :orderbook="exchange.orderbook" @select-symbol="selectMarket" />
+          <OrderHistoryTable :orders="exchange.orders" :cancelling-id="cancellingId" @cancel="cancelOrder" />
+        </div>
+        <div class="min-w-0 space-y-6">
+          <LimitOrderForm
+            ref="orderForm"
+            :symbol="exchange.symbol"
+            :profile="exchange.profile"
+            :submitting="isSubmitting"
+            :server-error="orderError"
+            @update-symbol="selectMarket"
+            @submit-order="submitOrder"
+            @clear-error="orderError = ''"
+          />
+          <RecentMatches :trades="exchange.trades" :realtime-badge="realtimeBadge" />
+        </div>
+      </section>
     </main>
   </div>
 </template>
