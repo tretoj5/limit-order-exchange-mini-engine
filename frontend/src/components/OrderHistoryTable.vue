@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { formatDecimal } from '../lib/decimal'
 import { formatOrderDate } from '../lib/format'
-import type { Order, OrderStatus } from '../types'
+import type { Order, OrderSide, OrderStatus, SymbolCode } from '../types'
 
 const props = defineProps<{
   orders: Order[]
@@ -13,16 +13,20 @@ const emit = defineEmits<{
   cancel: [orderId: number]
 }>()
 
-const filter = ref<'all' | 'open' | 'filled' | 'cancelled'>('all')
-const statusByFilter: Record<Exclude<typeof filter.value, 'all'>, OrderStatus> = {
+const statusFilter = ref<'all' | 'open' | 'filled' | 'cancelled'>('all')
+const symbolFilter = ref<'all' | SymbolCode>('all')
+const sideFilter = ref<'all' | OrderSide>('all')
+const statusByFilter: Record<Exclude<typeof statusFilter.value, 'all'>, OrderStatus> = {
   open: 1,
   filled: 2,
   cancelled: 3,
 }
 
 const filteredOrders = computed(() => props.orders.filter((order) => {
-  if (filter.value === 'all') return true
-  return order.status === statusByFilter[filter.value]
+  const matchesSymbol = symbolFilter.value === 'all' || order.symbol === symbolFilter.value
+  const matchesSide = sideFilter.value === 'all' || order.side === sideFilter.value
+  const matchesStatus = statusFilter.value === 'all' || order.status === statusByFilter[statusFilter.value]
+  return matchesSymbol && matchesSide && matchesStatus
 }))
 
 function statusLabel(status: OrderStatus): string {
@@ -45,13 +49,27 @@ function statusClass(status: OrderStatus): string {
         <h2 class="text-sm font-semibold text-white">Your orders</h2>
         <p class="mt-1 text-[11px] text-[#738092]">Open, filled, and cancelled activity</p>
       </div>
-      <label class="sr-only" for="order-status-filter">Filter orders by status</label>
-      <select id="order-status-filter" v-model="filter" class="rounded-lg border border-[#273241] bg-[#0b1017] px-3 py-2 text-xs text-[#aab4c2]">
-        <option value="all">All statuses</option>
-        <option value="open">Open</option>
-        <option value="filled">Filled</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
+      <div class="flex flex-wrap gap-2">
+        <label class="sr-only" for="order-symbol-filter">Filter orders by symbol</label>
+        <select id="order-symbol-filter" v-model="symbolFilter" class="rounded-lg border border-[#273241] bg-[#0b1017] px-3 py-2 text-xs text-[#aab4c2]">
+          <option value="all">All markets</option>
+          <option value="BTC">BTC / USD</option>
+          <option value="ETH">ETH / USD</option>
+        </select>
+        <label class="sr-only" for="order-side-filter">Filter orders by side</label>
+        <select id="order-side-filter" v-model="sideFilter" class="rounded-lg border border-[#273241] bg-[#0b1017] px-3 py-2 text-xs text-[#aab4c2]">
+          <option value="all">All sides</option>
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+        </select>
+        <label class="sr-only" for="order-status-filter">Filter orders by status</label>
+        <select id="order-status-filter" v-model="statusFilter" class="rounded-lg border border-[#273241] bg-[#0b1017] px-3 py-2 text-xs text-[#aab4c2]">
+          <option value="all">All statuses</option>
+          <option value="open">Open</option>
+          <option value="filled">Filled</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
     </div>
     <div class="thin-scrollbar overflow-x-auto">
       <table class="w-full min-w-[660px] border-collapse text-left">
