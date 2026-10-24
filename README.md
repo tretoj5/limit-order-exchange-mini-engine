@@ -112,4 +112,4 @@ Each event contains the recipient's own side, matched order ID/status, updated U
 - Orderbook reads return open orders only; the user's order history includes open, filled, and cancelled orders.
 - Each place/match/cancel operation uses one retryable transaction. A transaction-scoped PostgreSQL advisory lock serializes changes per symbol; row locks then follow the fixed order: users by id, assets by `(user_id, symbol)`, then orders by id.
 
-The PostgreSQL feature suite includes USD/asset conservation checks and multi-process race tests for shared-balance placement, double fills, and cancel-versus-match behavior. The frontend includes client-side unit tests for exact decimal previews.
+The PostgreSQL feature suite includes USD/asset conservation checks and multi-process race tests for shared-balance placement, double fills, and cancel-versus-match behavior. The frontend includes client-side unit tests for exact decimal previews and idempotent realtime store updates.

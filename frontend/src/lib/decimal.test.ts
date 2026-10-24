@@ -13,6 +13,10 @@ describe('exact decimal helpers', () => {
     expect(commission15('0.00000100')).toBe('0.00000002')
   })
 
+  it('truncates estimated volume at eight decimals like the backend', () => {
+    expect(multiplyToFixed8('0.00000003', '0.5')).toBe('0.00000001')
+  })
+
   it('validates positive values and supported decimal precision', () => {
     expect(isPositiveDecimal('0.00000001')).toBe(true)
     expect(isPositiveDecimal('0')).toBe(false)

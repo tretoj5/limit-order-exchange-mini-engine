@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '../lib/api'
 import { commission15, formatDecimal, isPositiveDecimal, multiplyToFixed8 } from '../lib/decimal'
+import { subscribeToMatches, unsubscribeFromMatches } from '../lib/realtime'
 import { useAuthStore } from '../stores/auth'
 import { useExchangeStore } from '../stores/exchange'
 import type { Order, OrderSide, OrderStatus, SymbolCode } from '../types'
@@ -18,6 +19,7 @@ const submitError = ref('')
 const actionError = ref('')
 const isSubmitting = ref(false)
 const cancellingId = ref<number | null>(null)
+const realtimeStatus = ref('Connecting to live updates')
 const orderFilter = ref<'all' | 'open' | 'filled' | 'cancelled'>('all')
 const tradeMode = computed(() => route.path === '/trade')
 const volumePreview = computed(() => multiplyToFixed8(price.value, amount.value))
@@ -43,6 +45,11 @@ const filteredOrders = computed(() => exchange.orders.filter((order) => {
 }))
 const quoteAsset = computed(() => exchange.symbol === 'BTC' ? 'BTC' : 'ETH')
 const currentAsset = computed(() => exchange.profile?.assets.find((asset) => asset.symbol === quoteAsset.value))
+const realtimeBadge = computed(() => {
+  if (realtimeStatus.value === 'Live updates connected') return 'LIVE'
+  if (realtimeStatus.value.startsWith('Set VITE_')) return 'SETUP'
+  return 'CONNECTING'
+})
 
 function setSide(side: OrderSide): void {
   selectedSide.value = side
@@ -56,6 +63,31 @@ async function loadWorkspace(): Promise<void> {
     actionError.value = exchange.error
   }
 
+  if (auth.user && auth.token) {
+    try {
+      subscribeToMatches(
+        auth.user.id,
+        auth.token,
+        (payload) => {
+          exchange.applyMatched(payload)
+          void exchange.refreshAll().catch((error: unknown) => {
+            actionError.value = errorMessage(error)
+          })
+        },
+        () => {
+          void exchange.refreshAll().catch((error: unknown) => {
+            actionError.value = errorMessage(error)
+          })
+        },
+        (status) => {
+          realtimeStatus.value = status
+        },
+      )
+      realtimeStatus.value = 'Waiting for live updates'
+    } catch (error) {
+      realtimeStatus.value = errorMessage(error)
+    }
+  }
 }
 
 async function refreshWorkspace(): Promise<void> {
@@ -106,6 +138,7 @@ async function cancelOrder(order: Order): Promise<void> {
 
 async function logout(): Promise<void> {
   actionError.value = ''
+  unsubscribeFromMatches()
   exchange.clear()
   try {
     await auth.logout()
@@ -158,6 +191,10 @@ onMounted(() => {
   void loadWorkspace()
 })
 
+onBeforeUnmount(() => {
+  unsubscribeFromMatches()
+})
+
 </script>
 
 <template>
@@ -182,7 +219,7 @@ onMounted(() => {
           Exchange status
         </div>
         <p class="text-[11px] leading-5 text-[#7d8999]">Orders settle atomically. Updates are delivered on your private channel.</p>
-        <p class="mt-3 text-[10px] text-[#677485]">Private wallet and order data</p>
+        <p class="mt-3 text-[10px] text-[#677485]">{{ realtimeStatus }}</p>
       </div>
     </aside>
 
@@ -208,7 +245,7 @@ onMounted(() => {
         <RouterLink to="/trade" class="rounded-lg px-3 py-2 text-xs font-semibold" :class="tradeMode ? 'bg-[#16231f] text-[#74e7b5]' : 'text-[#8995a5]'">Trade</RouterLink>
       </nav>
 
-      <div class="mx-auto max-w-[1500px] px-5 pb-12 pt-8 sm:px-8 lg:px-10">
+      <div class="mx-auto min-w-0 max-w-[1500px] px-5 pb-12 pt-8 sm:px-8 lg:px-10">
         <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p class="mb-2 text-[10px] font-bold uppercase tracking-[.23em] text-[#54dfa3]">{{ tradeMode ? 'Spot markets' : 'Personal workspace' }}</p>
@@ -256,8 +293,8 @@ onMounted(() => {
           </article>
         </section>
 
-        <section class="grid items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,.75fr)]">
-          <div class="space-y-5">
+        <section class="grid min-w-0 items-start gap-5 2xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,.75fr)]">
+          <div class="min-w-0 space-y-5">
             <article class="panel overflow-hidden">
               <div class="flex flex-wrap items-center justify-between gap-4 border-b border-[#202a36] px-5 py-4 sm:px-6">
                 <div>
@@ -338,7 +375,7 @@ onMounted(() => {
             </article>
           </div>
 
-          <div class="space-y-5">
+          <div class="min-w-0 space-y-5">
             <article class="panel p-5 sm:p-6">
               <div class="mb-5 flex items-start justify-between">
                 <div>
@@ -404,7 +441,7 @@ onMounted(() => {
                   <h2 class="text-sm font-semibold text-white">Recent matches</h2>
                   <p class="mt-1 text-[11px] text-[#738092]">Live fills for your account</p>
                 </div>
-                <span class="flex items-center gap-1.5 text-[10px] text-[#54dfa3]"><i class="h-1.5 w-1.5 rounded-full bg-current"></i> LIVE</span>
+                <span class="flex items-center gap-1.5 text-[10px]" :class="realtimeBadge === 'LIVE' ? 'text-[#54dfa3]' : 'text-[#8995a5]'"><i class="h-1.5 w-1.5 rounded-full bg-current"></i> {{ realtimeBadge }}</span>
               </div>
               <div v-if="!exchange.trades.length" class="grid min-h-[116px] place-items-center px-5 text-center text-xs leading-5 text-[#657284]">Your completed trades will appear here as they happen.</div>
               <div v-else class="divide-y divide-[#202a36]">

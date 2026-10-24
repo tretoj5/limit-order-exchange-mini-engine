@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import api, { errorMessage } from '../lib/api'
 import type {
   Order,
+  OrderMatchedPayload,
   OrderResponse,
   Orderbook,
   Profile,
@@ -19,6 +20,8 @@ export const useExchangeStore = defineStore('exchange', () => {
   const loading = ref(false)
   const error = ref('')
   const notice = ref('')
+  const seenTradeIds = new Set<number>()
+  let latestWalletTradeId = 0
 
   async function refreshAll(): Promise<void> {
     loading.value = true
@@ -72,6 +75,33 @@ export const useExchangeStore = defineStore('exchange', () => {
     notice.value = 'Order cancelled. Reserved funds have been released.'
   }
 
+  function applyMatched(payload: OrderMatchedPayload): void {
+    if (seenTradeIds.has(payload.trade.id)) return
+
+    seenTradeIds.add(payload.trade.id)
+    if (seenTradeIds.size > 1000) {
+      const oldestId = seenTradeIds.values().next().value
+      if (oldestId !== undefined) seenTradeIds.delete(oldestId)
+    }
+
+    if (profile.value && payload.trade.id >= latestWalletTradeId) {
+      profile.value = {
+        ...profile.value,
+        balance: payload.balance,
+        assets: payload.assets,
+      }
+      latestWalletTradeId = payload.trade.id
+    }
+
+    const existingOrder = orders.value.find((order) => order.id === payload.order.id)
+    if (existingOrder && existingOrder.status < payload.order.status) {
+      existingOrder.status = payload.order.status
+    }
+
+    addRecentTrade(payload.trade)
+    notice.value = `${payload.trade.symbol} order matched at ${payload.trade.price}.`
+  }
+
   function addRecentTrade(trade: Trade): void {
     if (trades.value.some((item) => item.id === trade.id)) return
     trades.value = [trade, ...trades.value]
@@ -84,6 +114,8 @@ export const useExchangeStore = defineStore('exchange', () => {
     orders.value = []
     orderbook.value = { symbol: symbol.value, buy: [], sell: [] }
     trades.value = []
+    seenTradeIds.clear()
+    latestWalletTradeId = 0
     error.value = ''
     notice.value = ''
   }
@@ -104,6 +136,7 @@ export const useExchangeStore = defineStore('exchange', () => {
     selectSymbol,
     placeOrder,
     cancelOrder,
+    applyMatched,
     clear,
   }
 })

@@ -9,7 +9,7 @@ export function isPositiveDecimal(value: string): boolean {
 export function multiplyToFixed8(left: string, right: string): string {
   if (!DECIMAL_PATTERN.test(left) || !DECIMAL_PATTERN.test(right)) return '0.00000000'
   const product = toScaledInteger(left) * toScaledInteger(right)
-  return fromScaledInteger((product + SCALE / 2n) / SCALE)
+  return fromScaledInteger(product / SCALE)
 }
 
 export function commission15(volume: string): string {
