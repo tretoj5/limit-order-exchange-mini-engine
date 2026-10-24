@@ -1,6 +1,6 @@
 # Limit Order Exchange
 
-Laravel API for a limit-order exchange, backed by PostgreSQL. Phase 1 provides the database foundation, Sanctum authentication, and profile endpoint.
+Laravel API for a limit-order exchange, backed by PostgreSQL. The backend currently provides the database foundation, Sanctum authentication, the profile endpoint, order placement, full-match execution, orderbook/history reads, and cancellation.
 
 ## Requirements
 
@@ -40,7 +40,7 @@ The database seeder creates `demo@exchange.test` with password `password`. Seede
 
 The backend stack is PHP 8.3, Laravel 13, PostgreSQL 16, Sanctum 4, and the Pusher PHP SDK 7.
 
-## Phase 1 API
+## Authentication and profile API
 
 - `POST /api/register` accepts `name`, `email`, `password`, and `password_confirmation`.
 - `POST /api/login` accepts `email` and `password`.
@@ -74,17 +74,29 @@ Example:
 }
 ```
 
+## Order API
+
+All order endpoints require a Sanctum bearer token. Supported symbols are configured in `backend/config/exchange.php` (`BTC`, `ETH`).
+
+- `GET /api/orders?symbol=BTC` returns open buy/sell orders sorted by price-time priority. The payload contains no user IDs.
+- `GET /api/orders/mine?symbol=BTC&side=buy&status=1` returns the authenticated user's paginated history; each filter is optional.
+- `POST /api/orders` accepts `symbol`, `side`, `price`, and `amount`, with price and amount supplied as decimal strings. It returns the new order and a trade summary or `null` when the order rests.
+- `POST /api/orders/{id}/cancel` cancels an owned open order and releases its reserved USD or assets. Filled/cancelled orders cannot be cancelled.
+
+Order creation reserves the full limit-price value plus the 1.5% maximum buyer fee for buy orders. Sell orders move available assets into `locked_amount`. Matching is full-amount only, requires a crossing price, chooses the best-priced then oldest counter order, and executes at the resting order's price. Price improvement and unused fee reserve return to the buyer. The buyer pays the fee in USD; the seller receives the full trade volume.
+
 ## Financial design decisions
 
 - Money and quantities use PostgreSQL fixed-point decimals with scale 8; PHP calculations use BCMath strings.
-- Database CHECK constraints reject negative balances and asset quantities, invalid order sides/statuses, non-positive order prices/amounts, and invalid trade values.
+- Database CHECK constraints reject negative balances and asset quantities, combined asset amounts above their supported precision, invalid order sides/statuses, non-positive order prices/amounts, and invalid trade values.
 - Order status values are `1` open, `2` filled, and `3` cancelled; order sides are `buy` and `sell`.
 - Supported symbols are `BTC` and `ETH`.
-- Planned matching requires an open counter-order for the same symbol with a crossing price and exactly the same amount; partial fills are not supported.
-- Planned counter-order priority is best price, then oldest `created_at` and `id`; execution uses the resting order's price.
+- Matching requires an open counter-order for the same symbol with a crossing price and exactly the same amount; partial fills are not supported.
+- Counter-order priority is best price, then oldest `created_at` and `id`; execution uses the resting order's price.
 - The buyer pays a 1.5% commission in USD, rounded half-up to 8 decimal places. Buy orders reserve the limit-price value plus maximum fee; unused price improvement and fee headroom are refunded at settlement.
+- Order notional must remain nonzero at 8-decimal USD precision; reserves and settlement amounts are checked against their PostgreSQL column limits.
 - Sell placement moves the amount from available assets to `locked_amount`; cancellation releases the corresponding USD or asset hold.
-- Planned orderbook reads return open orders only; the user's order history includes open, filled, and cancelled orders.
-- Planned state changes use one retryable transaction and a fixed row-lock order: users by id, assets by `(user_id, symbol)`, then orders by id. Match broadcasts happen after commit.
+- Orderbook reads return open orders only; the user's order history includes open, filled, and cancelled orders.
+- Each place/match/cancel operation uses one retryable transaction. A transaction-scoped PostgreSQL advisory lock serializes changes per symbol; row locks then follow the fixed order: users by id, assets by `(user_id, symbol)`, then orders by id.
 
-Order placement, matching, cancellation, realtime broadcasting, order endpoints, concurrency tests, and the Vue frontend are planned for later phases and are not implemented in Phase 1.
+After-commit trade broadcasting, the Vue frontend, and dedicated multi-process concurrency tests remain for later phases.
