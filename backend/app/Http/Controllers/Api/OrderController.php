@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Enums\OrderSide;
 use App\Enums\OrderStatus;
+use App\Events\MarketDepthUpdated;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\CancelOrderRequest;
 use App\Http\Requests\Order\OrderbookRequest;
@@ -140,6 +141,9 @@ class OrderController extends Controller
 
             $trade = $this->matchingEngine->matchOrder($order);
             $order->refresh();
+            if ($trade === null) {
+                event(new MarketDepthUpdated($symbol));
+            }
 
             return [
                 'order' => $this->formatOrder($order),
@@ -259,6 +263,7 @@ class OrderController extends Controller
 
             $lockedOrder->status = OrderStatus::Cancelled;
             $lockedOrder->save();
+            event(new MarketDepthUpdated($lockedOrder->symbol));
 
             return $lockedOrder->refresh();
         }, attempts: 3);

@@ -1,6 +1,6 @@
 import Echo from 'laravel-echo'
 import Pusher from 'pusher-js'
-import type { OrderMatchedPayload } from '../types'
+import type { MarketDepthUpdatedPayload, OrderMatchedPayload, SymbolCode } from '../types'
 
 declare global {
   interface Window {
@@ -13,7 +13,9 @@ type EchoClient = Echo<'pusher'>
 let echo: EchoClient | null = null
 let subscribedUserId: number | null = null
 let subscribedToken: string | null = null
+let subscribedMarketSymbol: SymbolCode | null = null
 let activeHandler: ((payload: OrderMatchedPayload) => void) | null = null
+let activeMarketHandler: ((payload: MarketDepthUpdatedPayload) => void) | null = null
 let hasConnected = false
 let onReconnect: (() => void) | null = null
 let onStatusChange: ((status: string) => void) | null = null
@@ -21,14 +23,18 @@ let onStatusChange: ((status: string) => void) | null = null
 export function subscribeToMatches(
   userId: number,
   token: string,
+  marketSymbol: SymbolCode,
   onMatch: (payload: OrderMatchedPayload) => void,
+  onMarketDepthUpdate: (payload: MarketDepthUpdatedPayload) => void,
   resync: () => void,
   statusChange: (status: string) => void,
 ): void {
   if (subscribedUserId === userId && subscribedToken === token && echo) {
     activeHandler = onMatch
+    activeMarketHandler = onMarketDepthUpdate
     onReconnect = resync
     onStatusChange = statusChange
+    subscribeToMarket(marketSymbol)
     return
   }
 
@@ -54,12 +60,14 @@ export function subscribeToMatches(
   subscribedUserId = userId
   subscribedToken = token
   activeHandler = onMatch
+  activeMarketHandler = onMarketDepthUpdate
   onReconnect = resync
   onStatusChange = statusChange
   hasConnected = false
   echo.private(`user.${userId}`).listen('.OrderMatched', (payload: OrderMatchedPayload) => {
     activeHandler?.(payload)
   })
+  subscribeToMarket(marketSymbol)
 
   echo.connector.pusher.connection.bind('state_change', ({ current }: { current: string }) => {
     if (current === 'connected') {
@@ -72,15 +80,28 @@ export function subscribeToMatches(
   })
 }
 
+function subscribeToMarket(symbol: SymbolCode): void {
+  if (!echo || subscribedMarketSymbol === symbol) return
+  if (subscribedMarketSymbol !== null) echo.leave(`market.${subscribedMarketSymbol}`)
+
+  subscribedMarketSymbol = symbol
+  echo.private(`market.${symbol}`).listen('.MarketDepthUpdated', (payload: MarketDepthUpdatedPayload) => {
+    if (payload.symbol === subscribedMarketSymbol) activeMarketHandler?.(payload)
+  })
+}
+
 export function unsubscribeFromMatches(): void {
   if (echo && subscribedUserId !== null) {
     echo.leave(`user.${subscribedUserId}`)
+    if (subscribedMarketSymbol !== null) echo.leave(`market.${subscribedMarketSymbol}`)
     echo.disconnect()
   }
   echo = null
   subscribedUserId = null
   subscribedToken = null
+  subscribedMarketSymbol = null
   activeHandler = null
+  activeMarketHandler = null
   onReconnect = null
   onStatusChange = null
   hasConnected = false

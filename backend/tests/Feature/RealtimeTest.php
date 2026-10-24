@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\OrderMatched;
+use App\Events\MarketDepthUpdated;
 use App\Models\Asset;
 use App\Models\Order;
 use App\Models\User;
@@ -65,25 +66,36 @@ class RealtimeTest extends TestCase
 
         DB::commit();
 
-        $this->assertSame(2, DB::table('jobs')->count());
+        $this->assertSame(4, DB::table('jobs')->count());
         $events = DB::table('jobs')
             ->orderBy('id')
             ->get()
-            ->map(function (object $row): OrderMatched {
+            ->map(function (object $row): object {
                 $payload = json_decode($row->payload, true, flags: JSON_THROW_ON_ERROR);
                 $job = unserialize($payload['data']['command'], ['allowed_classes' => true]);
 
                 $this->assertInstanceOf(BroadcastEvent::class, $job);
 
                 return $job->event;
-            })
+            });
+        $marketEvents = $events->filter(fn (object $event): bool => $event instanceof MarketDepthUpdated);
+        $this->assertCount(2, $marketEvents);
+        foreach ($marketEvents as $marketEvent) {
+            $this->assertTrue($marketEvent->afterCommit);
+            $this->assertSame('MarketDepthUpdated', $marketEvent->broadcastAs());
+            $this->assertSame('private-market.BTC', $marketEvent->broadcastOn()[0]->name);
+            $this->assertSame(['symbol' => 'BTC'], $marketEvent->broadcastWith());
+        }
+
+        $partyEvents = $events
+            ->filter(fn (object $event): bool => $event instanceof OrderMatched)
             ->sortBy('userId')
             ->values();
 
-        $this->assertSame([$buyer->id, $seller->id], $events->pluck('userId')->all());
+        $this->assertSame([$buyer->id, $seller->id], $partyEvents->pluck('userId')->all());
 
-        $buyerEvent = $events->firstWhere('userId', $buyer->id);
-        $sellerEvent = $events->firstWhere('userId', $seller->id);
+        $buyerEvent = $partyEvents->firstWhere('userId', $buyer->id);
+        $sellerEvent = $partyEvents->firstWhere('userId', $seller->id);
 
         $this->assertTrue($buyerEvent->afterCommit);
         $this->assertTrue($sellerEvent->afterCommit);
@@ -123,7 +135,7 @@ class RealtimeTest extends TestCase
         $this->assertArrayNotHasKey('seller_id', $buyerEvent->broadcastWith()['trade']);
     }
 
-    public function test_unmatched_order_does_not_queue_a_broadcast(): void
+    public function test_unmatched_order_broadcasts_market_depth_update_after_commit(): void
     {
         $user = $this->createUser('resting@example.test');
         config(['queue.default' => 'database']);
@@ -137,7 +149,14 @@ class RealtimeTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->assertSame(0, DB::table('jobs')->count());
+        $this->assertSame(1, DB::table('jobs')->count());
+        $payload = json_decode(DB::table('jobs')->value('payload'), true, flags: JSON_THROW_ON_ERROR);
+        $job = unserialize($payload['data']['command'], ['allowed_classes' => true]);
+
+        $this->assertInstanceOf(BroadcastEvent::class, $job);
+        $this->assertInstanceOf(MarketDepthUpdated::class, $job->event);
+        $this->assertTrue($job->event->afterCommit);
+        $this->assertSame('private-market.BTC', $job->event->broadcastOn()[0]->name);
     }
 
     public function test_rolled_back_match_does_not_queue_broadcasts(): void
@@ -196,6 +215,56 @@ class RealtimeTest extends TestCase
                 'channel_name' => 'private-user.'.$user->id,
             ])
             ->assertForbidden();
+    }
+
+    public function test_authenticated_users_can_subscribe_to_supported_market_depth_channels(): void
+    {
+        $user = $this->createUser('market-listener@example.test');
+
+        $this->withToken($user->createToken('api')->plainTextToken)
+            ->postJson('/broadcasting/auth', [
+                'socket_id' => '1234.5678',
+                'channel_name' => 'private-market.BTC',
+            ])
+            ->assertOk()
+            ->assertJsonStructure(['auth']);
+
+        $this->withToken($user->createToken('api')->plainTextToken)
+            ->postJson('/broadcasting/auth', [
+                'socket_id' => '1234.5678',
+                'channel_name' => 'private-market.UNKNOWN',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_cancelling_an_open_order_broadcasts_market_depth_update(): void
+    {
+        $user = $this->createUser('market-cancel@example.test');
+        $token = $user->createToken('api')->plainTextToken;
+
+        $orderId = $this->withToken($token)
+            ->postJson('/api/orders', [
+                'symbol' => 'BTC',
+                'side' => 'sell',
+                'price' => '95000',
+                'amount' => '0.01',
+            ])
+            ->assertCreated()
+            ->json('order.id');
+
+        DB::table('jobs')->delete();
+
+        $this->withToken($token)
+            ->postJson("/api/orders/{$orderId}/cancel")
+            ->assertOk();
+
+        $this->assertSame(1, DB::table('jobs')->count());
+        $payload = json_decode(DB::table('jobs')->value('payload'), true, flags: JSON_THROW_ON_ERROR);
+        $job = unserialize($payload['data']['command'], ['allowed_classes' => true]);
+
+        $this->assertInstanceOf(BroadcastEvent::class, $job);
+        $this->assertInstanceOf(MarketDepthUpdated::class, $job->event);
+        $this->assertSame(['symbol' => 'BTC'], $job->event->broadcastWith());
     }
 
     private function createUser(string $email): User

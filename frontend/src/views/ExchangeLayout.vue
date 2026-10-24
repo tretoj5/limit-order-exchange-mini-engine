@@ -6,6 +6,7 @@ import { subscribeToMatches, unsubscribeFromMatches } from '../lib/realtime'
 import { useAuthStore } from '../stores/auth'
 import { useExchangeStore } from '../stores/exchange'
 import { useToastStore } from '../stores/toast'
+import type { SymbolCode } from '../types'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,9 +29,7 @@ async function syncWorkspaceData(): Promise<void> {
   }
 }
 
-async function loadWorkspace(): Promise<void> {
-  await syncWorkspaceData()
-
+function subscribeToRealtime(symbol: SymbolCode): void {
   if (!auth.user || !auth.token) return
 
   try {
@@ -38,8 +37,12 @@ async function loadWorkspace(): Promise<void> {
     subscribeToMatches(
       auth.user.id,
       auth.token,
+      symbol,
       (payload) => {
         exchange.applyMatched(payload)
+      },
+      (payload) => {
+        void exchange.refreshMarketDepth(payload.symbol)
       },
       () => {
         void exchange.refreshAll().catch((error: unknown) => {
@@ -55,6 +58,15 @@ async function loadWorkspace(): Promise<void> {
     toast.show(realtimeStatus.value, 'error')
   }
 }
+
+async function loadWorkspace(): Promise<void> {
+  await syncWorkspaceData()
+  subscribeToRealtime(exchange.symbol)
+}
+
+watch(() => exchange.symbol, (symbol: SymbolCode) => {
+  subscribeToRealtime(symbol)
+})
 
 async function logout(): Promise<void> {
   unsubscribeFromMatches()

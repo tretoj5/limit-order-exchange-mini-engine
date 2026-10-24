@@ -108,6 +108,7 @@ export const useExchangeStore = defineStore('exchange', () => {
       upsertMatchedOrder(data.order)
       removeMatchedOrderFromOrderbook(data.order.id)
       addRecentTrade(data.trade)
+      await refreshMarketDepth(data.trade.symbol)
     } else {
       await Promise.all([refreshProfile(), refreshOrders(), refreshOrderbook()])
     }
@@ -147,6 +148,16 @@ export const useExchangeStore = defineStore('exchange', () => {
     removeMatchedOrderFromOrderbook(payload.order.id)
     addRecentTrade(payload.trade)
     notice.value = `${payload.trade.symbol} order matched at ${payload.trade.price}.`
+  }
+
+  async function refreshMarketDepth(matchedSymbol: SymbolCode): Promise<void> {
+    if (symbol.value !== matchedSymbol) return
+
+    try {
+      await refreshOrderbook()
+    } catch (cause) {
+      error.value = errorMessage(cause)
+    }
   }
 
   function upsertMatchedOrder(order: Order): void {
@@ -214,6 +225,7 @@ export const useExchangeStore = defineStore('exchange', () => {
     placeOrder,
     cancelOrder,
     applyMatched,
+    refreshMarketDepth,
     clear,
   }
 })

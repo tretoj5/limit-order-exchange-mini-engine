@@ -24,9 +24,11 @@ vi.mock('../lib/api', () => ({
 describe('exchange store live updates', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    get.mockReset()
+    post.mockReset()
   })
 
-  it('applies matched snapshots once and ignores stale wallet data', () => {
+  it('applies matched snapshots once and ignores stale wallet data', async () => {
     const store = useExchangeStore()
     store.profile = {
       id: 4,
@@ -80,9 +82,9 @@ describe('exchange store live updates', () => {
       assets: [{ symbol: 'BTC', amount: '1.01000000', locked_amount: '0.00000000' }],
     }
 
-    store.applyMatched(match)
-    store.applyMatched(match)
-    store.applyMatched({
+    await store.applyMatched(match)
+    await store.applyMatched(match)
+    await store.applyMatched({
       ...match,
       trade: { ...match.trade, id: 90, price: '90000.00000000' },
       balance: '51000.00000000',
@@ -96,49 +98,37 @@ describe('exchange store live updates', () => {
     expect(store.trades[0]?.id).toBe(91)
   })
 
-  it('inserts a matched order and removes it from the orderbook without fetching', () => {
+  it('refreshes the selected market depth when a market update arrives', async () => {
     const store = useExchangeStore()
-    store.orders = []
     store.orderbook = {
       symbol: 'BTC',
-      buy: [{
-        id: 12,
+      buy: [],
+      sell: [{
+        id: 99,
         symbol: 'BTC',
-        side: 'buy',
+        side: 'sell',
         price: '95000.00000000',
         amount: '0.01000000',
         status: 1,
         created_at: null,
       }],
-      sell: [],
     }
-    const order: OrderMatchedPayload['order'] = {
-      id: 12,
-      symbol: 'BTC',
-      side: 'buy',
-      price: '95000.00000000',
-      amount: '0.01000000',
-      status: 2,
-      created_at: '2026-10-24T10:00:00.000000Z',
-    }
-
-    store.applyMatched({
-      trade: {
-        id: 91,
-        symbol: 'BTC',
-        price: '95000.00000000',
-        amount: '0.01000000',
-        usd_volume: '950.00000000',
-        fee: '14.25000000',
-        side: 'buy',
-      },
-      order,
-      balance: '49035.75000000',
-      assets: [{ symbol: 'BTC', amount: '1.01000000', locked_amount: '0.00000000' }],
+    get.mockResolvedValueOnce({
+      data: { symbol: 'BTC', buy: [], sell: [] },
     })
 
-    expect(store.orders).toEqual([order])
-    expect(store.orderbook.buy).toHaveLength(0)
+    await store.refreshMarketDepth('BTC')
+
+    expect(store.orderbook.sell).toHaveLength(0)
+    expect(get).toHaveBeenCalledWith('/orders', { params: { symbol: 'BTC' } })
+  })
+
+  it('does not refresh market depth for a different selected symbol', async () => {
+    const store = useExchangeStore()
+    store.symbol = 'ETH'
+
+    await store.refreshMarketDepth('BTC')
+
     expect(get).not.toHaveBeenCalled()
   })
 
@@ -155,7 +145,7 @@ describe('exchange store live updates', () => {
     get.mockReturnValueOnce(response.promise)
 
     const refresh = store.refreshProfile()
-    store.applyMatched({
+    await store.applyMatched({
       trade: {
         id: 91,
         symbol: 'BTC',

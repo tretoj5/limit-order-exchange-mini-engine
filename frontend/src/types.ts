@@ -47,6 +47,10 @@ export interface OrderMatchedPayload {
   assets: Asset[]
 }
 
+export interface MarketDepthUpdatedPayload {
+  symbol: SymbolCode
+}
+
 export interface Orderbook {
   symbol: SymbolCode
   buy: Order[]

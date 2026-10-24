@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\OrderSide;
 use App\Enums\OrderStatus;
+use App\Events\MarketDepthUpdated;
 use App\Events\OrderMatched;
 use App\Models\Asset;
 use App\Models\Order;
@@ -233,6 +234,7 @@ class MatchingEngine
             'fee' => $fee,
         ]);
 
+        event(new MarketDepthUpdated($trade->symbol));
         $this->broadcastMatch($trade, $buyOrder, $sellOrder, $buyer, $seller);
 
         return $trade;
