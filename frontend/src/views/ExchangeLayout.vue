@@ -1,26 +1,17 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import LimitOrderForm from '../components/LimitOrderForm.vue'
-import OrderBookPanel from '../components/OrderBookPanel.vue'
-import OrderHistoryTable from '../components/OrderHistoryTable.vue'
-import RecentMatches from '../components/RecentMatches.vue'
-import WalletSummary from '../components/WalletSummary.vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '../lib/api'
 import { subscribeToMatches, unsubscribeFromMatches } from '../lib/realtime'
 import { useAuthStore } from '../stores/auth'
 import { useExchangeStore } from '../stores/exchange'
-import type { OrderInput, SymbolCode } from '../types'
+import { useToastStore } from '../stores/toast'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const exchange = useExchangeStore()
-const orderForm = ref<{ reset: () => void } | null>(null)
-const actionError = ref('')
-const orderError = ref('')
-const isSubmitting = ref(false)
-const cancellingId = ref<number | null>(null)
+const toast = useToastStore()
 const realtimeStatus = ref('Connecting to live updates')
 const tradeMode = computed(() => route.path === '/trade')
 const realtimeBadge = computed(() => {
@@ -30,20 +21,10 @@ const realtimeBadge = computed(() => {
 })
 
 async function refreshWorkspace(): Promise<void> {
-  actionError.value = ''
   try {
     await exchange.refreshAll()
   } catch (error) {
-    actionError.value = errorMessage(error)
-  }
-}
-
-async function selectMarket(symbol: SymbolCode): Promise<void> {
-  actionError.value = ''
-  try {
-    await exchange.selectSymbol(symbol)
-  } catch (error) {
-    actionError.value = errorMessage(error)
+    exchange.error = errorMessage(error)
   }
 }
 
@@ -62,7 +43,7 @@ async function loadWorkspace(): Promise<void> {
       },
       () => {
         void exchange.refreshAll().catch((error: unknown) => {
-          actionError.value = errorMessage(error)
+          exchange.error = errorMessage(error)
         })
       },
       (status) => {
@@ -71,48 +52,34 @@ async function loadWorkspace(): Promise<void> {
     )
   } catch (error) {
     realtimeStatus.value = errorMessage(error)
-  }
-}
-
-async function submitOrder(input: OrderInput): Promise<void> {
-  orderError.value = ''
-  actionError.value = ''
-  isSubmitting.value = true
-
-  try {
-    await exchange.placeOrder(input)
-    orderForm.value?.reset()
-  } catch (error) {
-    orderError.value = errorMessage(error)
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-async function cancelOrder(orderId: number): Promise<void> {
-  actionError.value = ''
-  cancellingId.value = orderId
-  try {
-    await exchange.cancelOrder(orderId)
-  } catch (error) {
-    actionError.value = errorMessage(error)
-  } finally {
-    cancellingId.value = null
+    toast.show(realtimeStatus.value, 'error')
   }
 }
 
 async function logout(): Promise<void> {
-  actionError.value = ''
   unsubscribeFromMatches()
   exchange.clear()
+  toast.clear()
   try {
     await auth.logout()
   } catch (error) {
-    actionError.value = errorMessage(error)
+    toast.show(errorMessage(error), 'error')
   } finally {
     await router.push('/login')
   }
 }
+
+watch(() => exchange.error, (message) => {
+  if (!message) return
+  toast.show(message, 'error')
+  exchange.error = ''
+})
+
+watch(() => exchange.notice, (message) => {
+  if (!message) return
+  toast.show(message)
+  exchange.notice = ''
+})
 
 onMounted(() => {
   void loadWorkspace()
@@ -164,36 +131,9 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <div v-if="exchange.error || actionError" role="alert" class="mb-6 flex items-start justify-between gap-4 rounded-lg border border-[#651a15] bg-[#0a0e1a] px-4 py-3 text-sm text-[#cbd5e1]">
-        <span>{{ actionError || exchange.error }}</span>
-        <button type="button" class="text-[#cbd5e1]" aria-label="Dismiss error" @click="actionError = ''; exchange.error = ''">×</button>
-      </div>
-      <div v-if="exchange.notice" role="status" class="mb-6 flex items-center justify-between gap-3 rounded-lg border border-[#353845] bg-[#0a0e1a] px-4 py-3 text-sm text-[#e5e7eb]">
-        {{ exchange.notice }}
-        <button type="button" aria-label="Dismiss message" class="text-[#64748b]" @click="exchange.notice = ''">×</button>
-      </div>
-
-      <WalletSummary :profile="exchange.profile" />
-
-      <section class="grid min-w-0 items-start gap-6 2xl:grid-cols-[minmax(0,1.55fr)_minmax(330px,.75fr)]">
-        <div class="min-w-0 space-y-6">
-          <OrderBookPanel :symbol="exchange.symbol" :orderbook="exchange.orderbook" @select-symbol="selectMarket" />
-          <OrderHistoryTable :orders="exchange.orders" :cancelling-id="cancellingId" @cancel="cancelOrder" />
-        </div>
-        <div class="min-w-0 space-y-6">
-          <LimitOrderForm
-            ref="orderForm"
-            :symbol="exchange.symbol"
-            :profile="exchange.profile"
-            :submitting="isSubmitting"
-            :server-error="orderError"
-            @update-symbol="selectMarket"
-            @submit-order="submitOrder"
-            @clear-error="orderError = ''"
-          />
-          <RecentMatches :trades="exchange.trades" :realtime-badge="realtimeBadge" />
-        </div>
-      </section>
+      <RouterView v-slot="{ Component }">
+        <component :is="Component" :realtime-badge="realtimeBadge" />
+      </RouterView>
     </main>
   </div>
 </template>

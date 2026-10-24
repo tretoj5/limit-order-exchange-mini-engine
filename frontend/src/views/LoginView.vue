@@ -3,20 +3,20 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { errorMessage } from '../lib/api'
 import { useAuthStore } from '../stores/auth'
+import { useToastStore } from '../stores/toast'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 const isRegister = computed(() => route.meta.register === true)
 const name = ref('')
 const email = ref('')
 const password = ref('')
 const passwordConfirmation = ref('')
-const error = ref('')
 const busy = ref(false)
 
 async function submit(): Promise<void> {
-  error.value = ''
   busy.value = true
   try {
     if (isRegister.value) {
@@ -26,7 +26,7 @@ async function submit(): Promise<void> {
     }
     await router.push('/')
   } catch (cause) {
-    error.value = errorMessage(cause)
+    toast.show(errorMessage(cause), 'error')
   } finally {
     busy.value = false
   }
@@ -64,7 +64,6 @@ async function submit(): Promise<void> {
           <input v-model="passwordConfirmation" type="password" autocomplete="new-password" minlength="8" required class="input-shell block w-full px-4 py-3 text-[#f1f5f9] placeholder:text-[#64748b]" placeholder="Repeat your password">
         </label>
 
-        <p v-if="error" role="alert" class="rounded-lg border border-[#651a15] bg-[#0a0e1a] px-4 py-3 text-sm text-[#cbd5e1]">{{ error }}</p>
         <button :disabled="busy" class="primary-action flex w-full items-center justify-center gap-2 px-5 py-3 text-sm disabled:cursor-wait disabled:opacity-60">
           {{ busy ? 'Please wait…' : isRegister ? 'Create account' : 'Sign in' }}
           <span aria-hidden="true" class="transition-colors">↗</span>

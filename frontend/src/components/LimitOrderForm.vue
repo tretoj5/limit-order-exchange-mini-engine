@@ -1,25 +1,24 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { addFixed8, commission15, compareFixed8, formatDecimal, isPositiveDecimal, multiplyToFixed8 } from '../lib/decimal'
+import { useToastStore } from '../stores/toast'
 import type { OrderInput, OrderSide, Profile, SymbolCode } from '../types'
 
 const props = defineProps<{
   symbol: SymbolCode
   profile: Profile | null
   submitting: boolean
-  serverError: string
 }>()
 
 const emit = defineEmits<{
   updateSymbol: [symbol: SymbolCode]
   submitOrder: [input: OrderInput]
-  clearError: []
 }>()
 
+const toast = useToastStore()
 const selectedSide = ref<OrderSide>('buy')
 const price = ref('')
 const amount = ref('')
-const validationError = ref('')
 const volumePreview = computed(() => multiplyToFixed8(price.value, amount.value))
 const feePreview = computed(() => commission15(volumePreview.value))
 const reservePreview = computed(() => addFixed8(volumePreview.value, feePreview.value))
@@ -34,34 +33,26 @@ const reserveAmount = computed(() => selectedSide.value === 'buy' ? reservePrevi
 
 function setSide(side: OrderSide): void {
   selectedSide.value = side
-  clearErrors()
-}
-
-function clearErrors(): void {
-  validationError.value = ''
-  emit('clearError')
 }
 
 function submit(): void {
-  clearErrors()
-
   if (!isPositiveDecimal(price.value, 12) || !isPositiveDecimal(amount.value, 20)) {
-    validationError.value = 'Enter a positive price and amount with no more than 8 decimal places.'
+    toast.show('Enter a positive price and amount with no more than 8 decimal places.', 'error')
     return
   }
 
   if (!isPositiveDecimal(volumePreview.value)) {
-    validationError.value = 'The order value must be greater than zero at 8 decimal places.'
+    toast.show('The order value must be greater than zero at 8 decimal places.', 'error')
     return
   }
 
   if (selectedSide.value === 'buy' && props.profile && compareFixed8(reservePreview.value, props.profile.balance) > 0) {
-    validationError.value = 'Insufficient USD balance for the order value and maximum buyer fee.'
+    toast.show('Insufficient USD balance for the order value and maximum buyer fee.', 'error')
     return
   }
 
   if (selectedSide.value === 'sell' && compareFixed8(amount.value, currentAsset.value?.amount ?? '0.00000000') > 0) {
-    validationError.value = `Insufficient available ${quoteAsset.value} balance.`
+    toast.show(`Insufficient available ${quoteAsset.value} balance.`, 'error')
     return
   }
 
@@ -76,7 +67,6 @@ function submit(): void {
 function reset(): void {
   price.value = ''
   amount.value = ''
-  validationError.value = ''
 }
 
 defineExpose({ reset })
@@ -96,14 +86,14 @@ defineExpose({ reset })
       <button
         type="button"
         class="ghost-action rounded-full px-3 py-2.5 text-xs transition"
-        :class="selectedSide === 'buy' ? 'border-[#e5e7eb] text-[#f1f5f9]' : 'text-[#64748b] hover:text-[#e5e7eb]'"
+        :class="selectedSide === 'buy' ? 'border-[#fa3812] bg-[#fa3812]/10 text-[#fa3812]' : 'text-[#64748b] hover:text-[#e5e7eb]'"
         :aria-pressed="selectedSide === 'buy'"
         @click="setSide('buy')"
       >Buy {{ symbol }}</button>
       <button
         type="button"
         class="ghost-action rounded-full px-3 py-2.5 text-xs transition"
-        :class="selectedSide === 'sell' ? 'border-[#e5e7eb] text-[#f1f5f9]' : 'text-[#64748b] hover:text-[#e5e7eb]'"
+        :class="selectedSide === 'sell' ? 'border-[#fa3812] bg-[#fa3812]/10 text-[#fa3812]' : 'text-[#64748b] hover:text-[#e5e7eb]'"
         :aria-pressed="selectedSide === 'sell'"
         @click="setSide('sell')"
       >Sell {{ symbol }}</button>
@@ -136,7 +126,6 @@ defineExpose({ reset })
             required
             aria-label="Limit price in USD"
             class="mono w-full bg-transparent py-3.5 text-sm text-[#e5e7eb] outline-none placeholder:text-[#64748b]"
-            @input="clearErrors"
           >
           <span class="text-[11px] text-[#64748b]">USD</span>
         </div>
@@ -153,7 +142,6 @@ defineExpose({ reset })
             required
             :aria-label="`Amount in ${symbol}`"
             class="mono w-full bg-transparent py-3.5 text-sm text-[#e5e7eb] outline-none placeholder:text-[#64748b]"
-            @input="clearErrors"
           >
           <span class="text-[11px] text-[#64748b]">{{ symbol }}</span>
         </div>
@@ -179,8 +167,6 @@ defineExpose({ reset })
         </div>
       </div>
 
-      <p v-if="validationError" role="alert" class="rounded-lg border border-[#651a15] bg-[#0a0e1a] px-3 py-2.5 text-xs text-[#cbd5e1]">{{ validationError }}</p>
-      <p v-else-if="serverError" role="alert" class="rounded-lg border border-[#651a15] bg-[#0a0e1a] px-3 py-2.5 text-xs text-[#cbd5e1]">{{ serverError }}</p>
       <button
         :disabled="submitting"
         class="primary-action w-full py-3 text-sm disabled:cursor-wait disabled:opacity-60"
