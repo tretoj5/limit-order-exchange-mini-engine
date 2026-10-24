@@ -1,28 +1,35 @@
 # Limit Order Exchange
 
-Laravel API for a limit-order exchange, backed by PostgreSQL. The backend currently provides the database foundation, Sanctum authentication, the profile endpoint, order placement, full-match execution, orderbook/history reads, and cancellation.
+Laravel API and Vue SPA for a limit-order exchange, backed by PostgreSQL. The app provides Sanctum authentication, a wallet and orderbook, full-match order execution, order history and cancellation, plus private realtime match updates.
 
 ## Requirements
 
 - Docker Engine with Docker Compose
 - A Pusher application for realtime credentials (required for live event delivery)
+- A modern browser (Chrome, Firefox, Safari, or Edge)
 
 ## Start the backend
 
 ```sh
 cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
 docker compose run --rm --no-deps backend php artisan key:generate
 docker compose up -d --build db db_test backend queue
 docker compose exec backend php artisan migrate --seed
+docker compose up -d frontend
 ```
 
-The API is available at `http://localhost:8000`. To run the PostgreSQL-backed feature tests:
+The API is available at `http://localhost:8000` and the SPA at `http://localhost:5173`. Set your Pusher app key and cluster in `frontend/.env` to enable live updates. Configure `VITE_API_BASE_URL` and `VITE_BROADCAST_AUTH_URL` there as well if the backend uses a different host or port.
+
+To run the PostgreSQL-backed backend tests and frontend tests/build:
 
 ```sh
 docker compose exec backend php artisan test
+docker compose exec frontend npm test
+docker compose exec frontend npm run build
 ```
 
-If port 8000 is already in use, set `BACKEND_PORT` when starting and when running Compose commands, for example `BACKEND_PORT=8001 docker compose up -d --build db db_test backend queue`.
+If port 8000 is already in use, set `BACKEND_PORT` when starting Compose, then update both frontend URLs in `frontend/.env` to use that port. For example, with `BACKEND_PORT=8001`, set the API URL to `http://localhost:8001/api` and broadcast auth URL to `http://localhost:8001/broadcasting/auth`.
 
 To stop the services:
 
@@ -36,16 +43,16 @@ The database seeder creates `demo@exchange.test` with password `password`. Seede
 
 ## Configuration
 
-`backend/.env.example` contains the PostgreSQL settings and Pusher variables. Set `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER`, and the matching `VITE_PUSHER_APP_KEY` / `VITE_PUSHER_APP_CLUSTER` values for a Pusher application; broadcasting is configured with `BROADCAST_CONNECTION=pusher`. The `queue` Compose service processes broadcast jobs. The test runner uses the isolated `db_test` service and the `exchange_test` database from `backend/phpunit.xml`.
+`backend/.env.example` contains the PostgreSQL settings and server-side Pusher variables. Set `PUSHER_APP_ID`, `PUSHER_APP_KEY`, `PUSHER_APP_SECRET`, `PUSHER_APP_CLUSTER`, and `BROADCAST_CONNECTION=pusher`. Set the matching public `VITE_PUSHER_APP_KEY` and `VITE_PUSHER_APP_CLUSTER` values in `frontend/.env`; configure `VITE_API_BASE_URL`, `VITE_BROADCAST_AUTH_URL`, and backend `FRONTEND_ORIGINS` if using a different local origin. The `queue` Compose service processes broadcast jobs. The test runner uses the isolated `db_test` service and the `exchange_test` database from `backend/phpunit.xml`.
 
-The backend stack is PHP 8.3, Laravel 13, PostgreSQL 16, Sanctum 4, and the Pusher PHP SDK 7.
+The stack is PHP 8.3, Laravel 13, PostgreSQL 16, Sanctum 4, Pusher PHP SDK 7, Vue 3, TypeScript, Tailwind CSS 4, Pinia, Vue Router, Laravel Echo, and Pusher JS.
 
 ## Authentication and profile API
 
 - `POST /api/register` accepts `name`, `email`, `password`, and `password_confirmation`.
 - `POST /api/login` accepts `email` and `password`.
 - Both endpoints return a Sanctum bearer token and the new/authenticated user's public fields.
-- Send the token as `Authorization: Bearer <token>`; `POST /api/logout` revokes that token.
+- Use `Authorization: Bearer <token>` for authenticated requests; `POST /api/logout` revokes that token.
 - `GET /api/profile` (Sanctum-authenticated; decimal balances are strings)
 - Registration and login are limited to five attempts per minute.
 
@@ -105,4 +112,4 @@ Each event contains the recipient's own side, matched order ID/status, updated U
 - Orderbook reads return open orders only; the user's order history includes open, filled, and cancelled orders.
 - Each place/match/cancel operation uses one retryable transaction. A transaction-scoped PostgreSQL advisory lock serializes changes per symbol; row locks then follow the fixed order: users by id, assets by `(user_id, symbol)`, then orders by id.
 
-The PostgreSQL feature suite includes USD/asset conservation checks and multi-process race tests for shared-balance placement, double fills, and cancel-versus-match behavior. The Vue frontend remains for a later phase.
+The PostgreSQL feature suite includes USD/asset conservation checks and multi-process race tests for shared-balance placement, double fills, and cancel-versus-match behavior. The frontend includes client-side unit tests for exact decimal previews.
