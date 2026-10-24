@@ -10,16 +10,21 @@ Laravel API and Vue SPA for a limit-order exchange, backed by PostgreSQL. The ap
 
 ## Start the backend
 
+On a fresh checkout, create local environment files and install the PHP dependencies before generating the application key:
+
 ```sh
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
+docker compose run --rm --no-deps backend composer install --no-interaction --prefer-dist
 docker compose run --rm --no-deps backend php artisan key:generate
-docker compose up -d --build db db_test backend queue
+docker compose up -d --build db db_test backend
 docker compose exec backend php artisan migrate --seed
-docker compose up -d frontend
+docker compose up -d queue frontend
 ```
 
 The API is available at `http://localhost:8000` and the SPA at `http://localhost:5173`. Set your Pusher app key and cluster in `frontend/.env` to enable live updates. Configure `VITE_API_BASE_URL` and `VITE_BROADCAST_AUTH_URL` there as well if the backend uses a different host or port.
+
+The frontend reads its Vite variables when its container starts. After changing `frontend/.env`, recreate the frontend container with `docker compose up -d --force-recreate frontend`. If changing the backend Pusher settings, recreate the queue worker too with `docker compose up -d --force-recreate queue`.
 
 To run the PostgreSQL-backed backend tests and frontend tests/build:
 
